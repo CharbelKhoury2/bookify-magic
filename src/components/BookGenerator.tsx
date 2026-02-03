@@ -3,12 +3,14 @@ import { Sparkles, RotateCcw } from 'lucide-react';
 import { ThemeSelector } from './ThemeSelector';
 import { PhotoUploader } from './PhotoUploader';
 import { PDFPreview } from './PDFPreview';
+import { FinishedModal } from './FinishedModal';
 import { Toast, ToastType } from './Toast';
 import { ErrorBoundary } from './ErrorBoundary';
 import { useBookStore } from '../store/bookStore';
 import { useHistoryStore } from '../store/historyStore';
 import { validateBookData } from '../utils/validators';
-import { generatePDF, downloadPDF, sanitizeFileName } from '../utils/pdfGenerator';
+import { downloadPDF, sanitizeFileName } from '../utils/pdfGenerator';
+import { startGenerationViaWebhook } from '../utils/webhookClient';
 
 export const BookGenerator: React.FC = () => {
   const {
@@ -21,6 +23,8 @@ export const BookGenerator: React.FC = () => {
     setIsGenerating,
     generatedPDF,
     setGeneratedPDF,
+    generationProgress,
+    setGenerationProgress,
     reset
   } = useBookStore();
   
@@ -28,13 +32,13 @@ export const BookGenerator: React.FC = () => {
   
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [generatedBlob, setGeneratedBlob] = useState<Blob | null>(null);
+  const [showFinished, setShowFinished] = useState(false);
 
   const showToast = (message: string, type: ToastType = 'info') => {
     setToast({ message, type });
   };
 
   const handleGenerate = async () => {
-    // Validate inputs
     const validation = validateBookData(childName, selectedTheme?.id || null, uploadedPhoto);
     if (!validation.isValid) {
       showToast(validation.error || 'Please fill in all fields', 'error');
@@ -45,34 +49,42 @@ export const BookGenerator: React.FC = () => {
 
     try {
       setIsGenerating(true);
+      setGenerationProgress(0);
 
-      const blob = await generatePDF(
+      const { pdfBlob, pdfUrl } = await startGenerationViaWebhook(
         childName.trim(),
         selectedTheme,
-        uploadedPhoto
+        uploadedPhoto,
+        (p) => setGenerationProgress(p)
       );
 
-      // Create URL for the PDF
-      const pdfUrl = URL.createObjectURL(blob);
-      
-      // Add to history
+      let finalPdfUrl: string | null = null;
+      if (pdfBlob) {
+        const url = URL.createObjectURL(pdfBlob);
+        finalPdfUrl = url;
+        setGeneratedBlob(pdfBlob);
+      } else if (pdfUrl) {
+        finalPdfUrl = pdfUrl;
+      }
+
+      if (!finalPdfUrl) throw new Error('No PDF returned from webhook');
+
       addToHistory({
         childName: childName.trim(),
         themeName: selectedTheme.name,
         themeEmoji: selectedTheme.emoji,
-        pdfUrl,
+        pdfUrl: finalPdfUrl,
         thumbnailUrl: processedPhoto?.thumbnail || ''
       });
 
-      // Store the blob for download
-      setGeneratedBlob(blob);
-      setGeneratedPDF(pdfUrl);
+      setGeneratedPDF(finalPdfUrl);
       setIsGenerating(false);
-
+      setGenerationProgress(100);
       showToast('Your magical book is ready!', 'success');
     } catch (error) {
       console.error('Generation error:', error);
       setIsGenerating(false);
+      setGenerationProgress(0);
       showToast('Failed to generate book. Please try again.', 'error');
     }
   };
@@ -82,12 +94,16 @@ export const BookGenerator: React.FC = () => {
       const fileName = `${sanitizeFileName(childName)}_${sanitizeFileName(selectedTheme.name)}_book.pdf`;
       downloadPDF(generatedBlob, fileName);
       showToast('Download started!', 'success');
+    } else if (generatedPDF) {
+      window.open(generatedPDF, '_blank');
     }
   };
 
   const handleReset = () => {
     reset();
     setGeneratedBlob(null);
+    setGenerationProgress(0);
+    setShowFinished(false);
   };
 
   const isFormValid = childName.trim().length >= 2 && selectedTheme && uploadedPhoto;
@@ -167,6 +183,17 @@ export const BookGenerator: React.FC = () => {
 
         {/* PDF Preview / Status */}
         <PDFPreview onDownload={handleDownload} />
+
+        {/* Finished Modal */}
+        <FinishedModal
+          open={showFinished}
+          onClose={() => setShowFinished(false)}
+          onView={() => {
+            if (generatedPDF) {
+              window.open(generatedPDF, '_blank');
+            }
+          }}
+        />
 
         {/* Toast Notification */}
         {toast && (

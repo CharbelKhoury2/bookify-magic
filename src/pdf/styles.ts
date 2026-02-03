@@ -1,0 +1,96 @@
+import { StyleSheet } from '@react-pdf/renderer';
+import { Theme } from '../utils/types';
+
+export const createStyles = (theme: Theme) => StyleSheet.create({
+  page: {
+    flexDirection: 'column',
+    backgroundColor: theme.colors.background,
+    padding: 40,
+    fontFamily: 'Helvetica',
+  },
+  coverPage: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.background,
+    padding: 40,
+  },
+  coverTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: theme.colors.primary,
+    textAlign: 'center',
+    marginBottom: 10,
+    fontFamily: 'Helvetica-Bold',
+  },
+  coverSubtitle: {
+    fontSize: 18,
+    color: theme.colors.secondary,
+    textAlign: 'center',
+    marginBottom: 30,
+  },
+  coverPhoto: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    marginBottom: 30,
+    objectFit: 'cover',
+  },
+  coverDecoration: {
+    fontSize: 48,
+    textAlign: 'center',
+  },
+  storyPage: {
+    flexDirection: 'column',
+    padding: 40,
+    backgroundColor: theme.colors.background,
+  },
+  pageNumber: {
+    position: 'absolute',
+    bottom: 20,
+    right: 40,
+    fontSize: 12,
+    color: theme.colors.secondary,
+  },
+  storyText: {
+    fontSize: 16,
+    lineHeight: 1.8,
+    color: theme.colors.primary,
+    textAlign: 'justify',
+    marginBottom: 20,
+  },
+  storyPhoto: {
+    width: 180,
+    height: 180,
+    alignSelf: 'center',
+    marginTop: 20,
+    marginBottom: 20,
+    objectFit: 'cover',
+  },
+  storyPhotoCircular: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    alignSelf: 'center',
+    marginTop: 20,
+    marginBottom: 20,
+    objectFit: 'cover',
+  },
+  pageHeader: {
+    fontSize: 14,
+    color: theme.colors.accent,
+    marginBottom: 20,
+    textAlign: 'center',
+    fontFamily: 'Helvetica-Bold',
+  },
+  decorativeBorder: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    right: 20,
+    bottom: 20,
+    borderWidth: 2,
+    borderColor: theme.colors.secondary,
+    borderRadius: 10,
+  },
+});

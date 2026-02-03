@@ -1,24 +1,18 @@
 import { ValidationResult } from './types';
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-
 export function validateChildName(name: string): ValidationResult {
-  const trimmedName = name.trim();
+  const trimmed = name.trim();
   
-  if (!trimmedName) {
-    return { isValid: false, error: 'Please enter a name for your child' };
-  }
-  
-  if (trimmedName.length < 2) {
+  if (trimmed.length < 2) {
     return { isValid: false, error: 'Name must be at least 2 characters' };
   }
   
-  if (trimmedName.length > 30) {
-    return { isValid: false, error: 'Name must be 30 characters or less' };
+  if (trimmed.length > 30) {
+    return { isValid: false, error: 'Name must be less than 30 characters' };
   }
   
-  if (!/^[a-zA-Z\s'-]+$/.test(trimmedName)) {
+  const nameRegex = /^[a-zA-Z\s\-']+$/;
+  if (!nameRegex.test(trimmed)) {
     return { isValid: false, error: 'Name can only contain letters, spaces, hyphens, and apostrophes' };
   }
   
@@ -26,21 +20,26 @@ export function validateChildName(name: string): ValidationResult {
 }
 
 export function validatePhoto(file: File): ValidationResult {
-  if (!ALLOWED_TYPES.includes(file.type)) {
-    return { 
-      isValid: false, 
-      error: 'Please upload a JPEG, PNG, WebP, or GIF image' 
-    };
+  const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+  
+  if (!validTypes.includes(file.type)) {
+    return { isValid: false, error: 'Photo must be JPG or PNG format' };
   }
   
-  if (file.size > MAX_FILE_SIZE) {
-    return { 
-      isValid: false, 
-      error: 'Image must be smaller than 10MB' 
-    };
+  const maxSize = 5 * 1024 * 1024; // 5MB
+  if (file.size > maxSize) {
+    return { isValid: false, error: 'Photo must be less than 5MB' };
   }
   
   return { isValid: true };
+}
+
+export function sanitizeFilename(name: string): string {
+  return name
+    .trim()
+    .replace(/[^a-zA-Z0-9]/g, '_')
+    .replace(/_+/g, '_')
+    .toLowerCase();
 }
 
 export function validateBookData(

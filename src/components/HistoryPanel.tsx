@@ -1,12 +1,12 @@
 import React from 'react';
-import { Clock, Download, Trash2, BookOpen } from 'lucide-react';
+import { Clock, Download, Trash2 } from 'lucide-react';
 import { useHistoryStore } from '../store/historyStore';
 import { formatDistanceToNow } from 'date-fns';
 
 export const HistoryPanel: React.FC = () => {
-  const { items, removeItem, clearHistory } = useHistoryStore();
+  const { history, removeFromHistory, clearHistory } = useHistoryStore();
 
-  if (items.length === 0) {
+  if (history.length === 0) {
     return (
       <div className="card-magical">
         <div className="flex items-center gap-3 mb-4">
@@ -39,11 +39,11 @@ export const HistoryPanel: React.FC = () => {
       </div>
 
       <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-        {items.map((item) => (
+        {history.map((item) => (
           <HistoryCard
             key={item.id}
             item={item}
-            onRemove={() => removeItem(item.id)}
+            onRemove={() => removeFromHistory(item.id)}
           />
         ))}
       </div>

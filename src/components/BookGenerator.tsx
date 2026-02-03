@@ -8,24 +8,23 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { useBookStore } from '../store/bookStore';
 import { useHistoryStore } from '../store/historyStore';
 import { validateBookData } from '../utils/validators';
-import { generatePDF, downloadPDF, createHistoryItem, sanitizeFileName } from '../utils/pdfGenerator';
-import { createThumbnail } from '../utils/imageProcessor';
+import { generatePDF, downloadPDF, sanitizeFileName } from '../utils/pdfGenerator';
 
 export const BookGenerator: React.FC = () => {
   const {
     childName,
     setChildName,
     selectedTheme,
-    photoFile,
-    generation,
-    setGenerationState,
-    setGeneratedPdfUrl,
-    generatedPdfUrl,
-    resetForm,
-    resetGeneration
+    uploadedPhoto,
+    processedPhoto,
+    isGenerating,
+    setIsGenerating,
+    generatedPDF,
+    setGeneratedPDF,
+    reset
   } = useBookStore();
   
-  const { addItem } = useHistoryStore();
+  const { addToHistory } = useHistoryStore();
   
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [generatedBlob, setGeneratedBlob] = useState<Blob | null>(null);
@@ -36,63 +35,44 @@ export const BookGenerator: React.FC = () => {
 
   const handleGenerate = async () => {
     // Validate inputs
-    const validation = validateBookData(childName, selectedTheme?.id || null, photoFile);
+    const validation = validateBookData(childName, selectedTheme?.id || null, uploadedPhoto);
     if (!validation.isValid) {
       showToast(validation.error || 'Please fill in all fields', 'error');
       return;
     }
 
-    if (!selectedTheme || !photoFile) return;
+    if (!selectedTheme || !uploadedPhoto) return;
 
     try {
-      setGenerationState({ 
-        isGenerating: true, 
-        stage: 'processing', 
-        progress: 0,
-        error: undefined 
-      });
+      setIsGenerating(true);
 
       const blob = await generatePDF(
         childName.trim(),
         selectedTheme,
-        photoFile,
-        (progress) => {
-          setGenerationState({ 
-            progress,
-            stage: progress < 70 ? 'processing' : 'generating'
-          });
-        }
+        uploadedPhoto
       );
 
-      // Create thumbnail for history
-      const thumbnail = await createThumbnail(photoFile);
+      // Create URL for the PDF
+      const pdfUrl = URL.createObjectURL(blob);
       
-      // Create history item
-      const historyItem = createHistoryItem(
-        childName.trim(),
-        selectedTheme,
-        blob,
-        thumbnail
-      );
-      addItem(historyItem);
+      // Add to history
+      addToHistory({
+        childName: childName.trim(),
+        themeName: selectedTheme.name,
+        themeEmoji: selectedTheme.emoji,
+        pdfUrl,
+        thumbnailUrl: processedPhoto?.thumbnail || ''
+      });
 
       // Store the blob for download
       setGeneratedBlob(blob);
-      setGeneratedPdfUrl(historyItem.pdfUrl);
-      setGenerationState({ 
-        isGenerating: false, 
-        stage: 'complete', 
-        progress: 100 
-      });
+      setGeneratedPDF(pdfUrl);
+      setIsGenerating(false);
 
       showToast('Your magical book is ready!', 'success');
     } catch (error) {
       console.error('Generation error:', error);
-      setGenerationState({ 
-        isGenerating: false, 
-        stage: 'error',
-        error: error instanceof Error ? error.message : 'Failed to generate book'
-      });
+      setIsGenerating(false);
       showToast('Failed to generate book. Please try again.', 'error');
     }
   };
@@ -106,13 +86,11 @@ export const BookGenerator: React.FC = () => {
   };
 
   const handleReset = () => {
-    resetForm();
-    resetGeneration();
+    reset();
     setGeneratedBlob(null);
   };
 
-  const isFormValid = childName.trim().length >= 2 && selectedTheme && photoFile;
-  const isGenerating = generation.isGenerating;
+  const isFormValid = childName.trim().length >= 2 && selectedTheme && uploadedPhoto;
 
   return (
     <ErrorBoundary>
@@ -174,7 +152,7 @@ export const BookGenerator: React.FC = () => {
               {isGenerating ? 'Creating Magic...' : 'Generate Book'}
             </button>
             
-            {(generation.stage !== 'idle' || childName || selectedTheme || photoFile) && (
+            {(generatedPDF || childName || selectedTheme || uploadedPhoto) && (
               <button
                 onClick={handleReset}
                 disabled={isGenerating}

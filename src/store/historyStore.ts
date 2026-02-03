@@ -3,39 +3,38 @@ import { persist } from 'zustand/middleware';
 import { HistoryItem } from '../utils/types';
 
 interface HistoryStore {
-  items: HistoryItem[];
-  addItem: (item: HistoryItem) => void;
-  removeItem: (id: string) => void;
+  history: HistoryItem[];
+  addToHistory: (item: Omit<HistoryItem, 'id' | 'timestamp'>) => void;
+  removeFromHistory: (id: string) => void;
   clearHistory: () => void;
 }
 
 export const useHistoryStore = create<HistoryStore>()(
   persist(
     (set) => ({
-      items: [],
+      history: [],
       
-      addItem: (item) => 
+      addToHistory: (item) =>
         set((state) => ({
-          items: [item, ...state.items].slice(0, 20) // Keep last 20 items
+          history: [
+            {
+              ...item,
+              id: Date.now().toString(),
+              timestamp: Date.now(),
+            },
+            ...state.history.slice(0, 9),
+          ],
         })),
       
-      removeItem: (id) =>
+      removeFromHistory: (id) =>
         set((state) => ({
-          items: state.items.filter((item) => item.id !== id)
+          history: state.history.filter((item) => item.id !== id),
         })),
       
-      clearHistory: () => set({ items: [] })
+      clearHistory: () => set({ history: [] }),
     }),
     {
       name: 'book-history',
-      // Don't persist blob URLs as they're temporary
-      partialize: (state) => ({
-        items: state.items.map(item => ({
-          ...item,
-          pdfUrl: '', // Clear blob URL
-          thumbnailUrl: item.thumbnailUrl // Keep base64 thumbnail
-        }))
-      })
     }
   )
 );

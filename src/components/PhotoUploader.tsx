@@ -3,14 +3,14 @@ import { useDropzone } from 'react-dropzone';
 import { Upload, X, Image as ImageIcon } from 'lucide-react';
 import { useBookStore } from '../store/bookStore';
 import { validatePhoto } from '../utils/validators';
-import { fileToDataUrl } from '../utils/imageProcessor';
+import { imageToBase64, preprocessPhoto } from '../utils/imageProcessor';
 
 interface PhotoUploaderProps {
   onError?: (message: string) => void;
 }
 
 export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ onError }) => {
-  const { photoFile, photoPreview, setPhotoFile, setPhotoPreview } = useBookStore();
+  const { uploadedPhoto, processedPhoto, setUploadedPhoto, setProcessedPhoto } = useBookStore();
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -23,26 +23,26 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ onError }) => {
     }
 
     try {
-      const preview = await fileToDataUrl(file);
-      setPhotoFile(file);
-      setPhotoPreview(preview);
+      setUploadedPhoto(file);
+      const processed = await preprocessPhoto(file);
+      setProcessedPhoto(processed);
     } catch (err) {
       onError?.('Failed to process image');
     }
-  }, [setPhotoFile, setPhotoPreview, onError]);
+  }, [setUploadedPhoto, setProcessedPhoto, onError]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'image/*': ['.jpeg', '.jpg', '.png', '.webp', '.gif']
+      'image/*': ['.jpeg', '.jpg', '.png']
     },
     maxFiles: 1,
-    maxSize: 10 * 1024 * 1024
+    maxSize: 5 * 1024 * 1024
   });
 
   const removePhoto = () => {
-    setPhotoFile(null);
-    setPhotoPreview(null);
+    setUploadedPhoto(null);
+    setProcessedPhoto(null);
   };
 
   return (
@@ -51,11 +51,11 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ onError }) => {
         Upload a Photo 📸
       </label>
 
-      {photoPreview ? (
+      {processedPhoto ? (
         <div className="relative animate-scale-in">
           <div className="relative w-40 h-40 mx-auto rounded-2xl overflow-hidden shadow-float border-4 border-primary/30">
             <img
-              src={photoPreview}
+              src={processedPhoto.circular}
               alt="Uploaded preview"
               className="w-full h-full object-cover"
             />
@@ -67,7 +67,7 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ onError }) => {
             </button>
           </div>
           <p className="text-center text-sm text-muted-foreground mt-3">
-            {photoFile?.name}
+            {uploadedPhoto?.name}
           </p>
         </div>
       ) : (
@@ -99,7 +99,7 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ onError }) => {
                 {isDragActive ? 'Drop the photo here!' : 'Drag & drop a photo'}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
-                or click to browse (JPEG, PNG, WebP)
+                or click to browse (JPG, PNG - max 5MB)
               </p>
             </div>
           </div>

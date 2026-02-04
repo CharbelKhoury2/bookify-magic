@@ -19,23 +19,49 @@ export interface GenerationStatusResponse {
 }
 
 async function postJson(url: string, body: any) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    throw new Error(`Webhook error ${res.status}`);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Webhook error ${res.status}${text ? `: ${text.slice(0, 200)}` : ''}`);
+    }
+    try {
+      return await res.json();
+    } catch {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Webhook returned non-JSON response${text ? `: ${text.slice(0, 200)}` : ''}`);
+    }
+  } catch (err: any) {
+    if (err?.name === 'TypeError') {
+      throw new Error('Network or CORS error contacting webhook');
+    }
+    throw err;
   }
-  return res.json();
 }
 
 async function getJson(url: string) {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Status error ${res.status}`);
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Status error ${res.status}${text ? `: ${text.slice(0, 200)}` : ''}`);
+    }
+    try {
+      return await res.json();
+    } catch {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Status endpoint returned non-JSON response${text ? `: ${text.slice(0, 200)}` : ''}`);
+    }
+  } catch (err: any) {
+    if (err?.name === 'TypeError') {
+      throw new Error('Network or CORS error contacting status endpoint');
+    }
+    throw err;
   }
-  return res.json();
 }
 
 export async function startGenerationViaWebhook(

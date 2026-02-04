@@ -47,6 +47,13 @@ export const BookGenerator: React.FC = () => {
 
     if (!selectedTheme || !uploadedPhoto) return;
 
+    // Preflight: ensure webhook URL is configured in runtime env
+    const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL as string | undefined;
+    if (!webhookUrl) {
+      showToast('Webhook URL is not configured. Create .env.local and set VITE_N8N_WEBHOOK_URL.', 'error');
+      return;
+    }
+
     try {
       setIsGenerating(true);
       setGenerationProgress(0);
@@ -85,7 +92,8 @@ export const BookGenerator: React.FC = () => {
       console.error('Generation error:', error);
       setIsGenerating(false);
       setGenerationProgress(0);
-      showToast('Failed to generate book. Please try again.', 'error');
+      const message = error instanceof Error ? error.message : 'Failed to generate book. Please try again.';
+      showToast(message, 'error');
     }
   };
 

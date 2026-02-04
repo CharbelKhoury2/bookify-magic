@@ -91,6 +91,9 @@ export async function startGenerationViaWebhook(
     themeId: theme.id,
     themeName: theme.name,
     photoBase64,
+    photoMime:
+      photoFile.type ||
+      (photoBase64.match(/^data:([^;]+);/)?.[1] ?? 'application/octet-stream'),
   };
 
   const start: GenerationStartResponse = await postJson(webhookUrl, payload);

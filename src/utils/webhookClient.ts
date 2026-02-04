@@ -43,9 +43,13 @@ async function postJson(url: string, body: any) {
   }
 }
 
-async function getJson(url: string) {
+async function getJson(url: string, method: 'GET' | 'POST' = 'GET', body?: any) {
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      method,
+      headers: method === 'POST' ? { 'Content-Type': 'application/json' } : undefined,
+      body: method === 'POST' && body !== undefined ? JSON.stringify(body) : undefined,
+    });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new Error(`Status error ${res.status}${text ? `: ${text.slice(0, 200)}` : ''}`);
@@ -72,6 +76,7 @@ export async function startGenerationViaWebhook(
 ): Promise<{ pdfBlob?: Blob; pdfUrl?: string }> {
   const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL as string | undefined;
   const statusUrlBase = import.meta.env.VITE_N8N_STATUS_URL as string | undefined; // e.g. https://n8n.example.com/webhook/status/:jobId
+  const statusMethod = ((import.meta.env.VITE_N8N_STATUS_METHOD as string | undefined) || 'GET').toUpperCase() as 'GET' | 'POST';
 
   if (!webhookUrl) {
     throw new Error('Missing VITE_N8N_WEBHOOK_URL env var');
@@ -116,7 +121,11 @@ export async function startGenerationViaWebhook(
   const startTime = Date.now();
 
   while (Date.now() - startTime < maxWaitMs) {
-    const status: GenerationStatusResponse = await getJson(statusUrl);
+    const status: GenerationStatusResponse = await getJson(
+      statusUrl,
+      statusMethod,
+      statusMethod === 'POST' ? { jobId } : undefined
+    );
 
     if (status.progress !== undefined) {
       onProgress?.(Math.min(99, Math.max(progressShown, status.progress)));

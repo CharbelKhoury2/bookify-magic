@@ -213,6 +213,25 @@
     background: linear-gradient(90deg, transparent 0%, hsl(var(--primary) / 0.3) 50%, transparent 100%);
     background-size: 200% 100%;
   }
+ 
+   /* Custom Scrollbar */
+   .custom-scrollbar::-webkit-scrollbar {
+     width: 8px;
+   }
+ 
+   .custom-scrollbar::-webkit-scrollbar-track {
+     background: hsl(var(--muted));
+     border-radius: 10px;
+   }
+ 
+   .custom-scrollbar::-webkit-scrollbar-thumb {
+     background: hsl(var(--muted-foreground) / 0.5);
+     border-radius: 10px;
+   }
+ 
+   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+     background: hsl(var(--muted-foreground) / 0.7);
+   }
 }
 
 /* Import Google Fonts */

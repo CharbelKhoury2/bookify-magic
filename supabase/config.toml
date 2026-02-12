@@ -1,1 +1,4 @@
 project_id = "ntuzizkddjbroprmrcyt"
+
+[functions.generate-book]
+verify_jwt = false

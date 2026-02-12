@@ -1,5 +1,6 @@
 import { Theme } from './types';
 import { imageToBase64 } from './imageProcessor';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface GenerationStartResponse {
   status?: string;
@@ -74,13 +75,8 @@ export async function startGenerationViaWebhook(
   photoFile: File,
   onProgress?: (p: number) => void
 ): Promise<{ pdfBlob?: Blob; pdfUrl?: string }> {
-  const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL as string | undefined;
-  const statusUrlBase = import.meta.env.VITE_N8N_STATUS_URL as string | undefined; // e.g. https://n8n.example.com/webhook/status/:jobId
+  const statusUrlBase = import.meta.env.VITE_N8N_STATUS_URL as string | undefined;
   const statusMethod = ((import.meta.env.VITE_N8N_STATUS_METHOD as string | undefined) || 'GET').toUpperCase() as 'GET' | 'POST';
-
-  if (!webhookUrl) {
-    throw new Error('Missing VITE_N8N_WEBHOOK_URL env var');
-  }
 
   onProgress?.(5);
   const photoBase64 = await imageToBase64(photoFile);
@@ -96,7 +92,30 @@ export async function startGenerationViaWebhook(
       (photoBase64.match(/^data:([^;]+);/)?.[1] ?? 'application/octet-stream'),
   };
 
-  const start: GenerationStartResponse = await postJson(webhookUrl, payload);
+  // Call through authenticated edge function proxy
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) {
+    throw new Error('Please sign in to generate books');
+  }
+
+  const edgeFunctionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-book`;
+  const res = await fetch(edgeFunctionUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+      'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody.error || 'Failed to generate book');
+  }
+
+  const start: GenerationStartResponse = await res.json();
 
   // If synchronous result
   if (start.pdfBase64 || start.pdfUrl) {

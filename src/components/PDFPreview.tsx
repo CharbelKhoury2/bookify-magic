@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Download, Eye } from 'lucide-react';
+import { FileText, Download } from 'lucide-react';
 import { useBookStore } from '../store/bookStore';
 import { LoadingSpinner } from './LoadingSpinner';
 import { ProgressBar } from './ProgressBar';
@@ -38,35 +38,36 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
   if (generatedPDF) {
     return (
       <div className="card-magical animate-scale-in">
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-success/20 mb-4">
-            <FileText className="w-8 h-8 text-success" />
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-success/20 flex items-center justify-center">
+              <FileText className="w-4 h-4 text-success" />
+            </div>
+            <h3 className="font-bold text-foreground">
+              {childName}'s {selectedTheme?.name}
+            </h3>
           </div>
-          <h3 className="text-xl font-bold text-foreground">
-            Your Book is Ready! 🎉
-          </h3>
-          <p className="text-muted-foreground mt-1">
-            {childName}'s {selectedTheme?.name} adventure awaits!
-          </p>
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-3">
-          <a
-            href={generatedPDF}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-primary text-primary font-semibold hover:bg-primary/5 transition-colors"
-          >
-            <Eye className="w-5 h-5" />
-            Preview PDF
-          </a>
           <button
             onClick={onDownload}
-            className="flex-1 btn-magic flex items-center justify-center gap-2"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/20 transition-colors"
           >
-            <Download className="w-5 h-5" />
-            Download PDF
+            <Download className="w-4 h-4" />
+            Download
           </button>
+        </div>
+
+        <div className="relative w-full aspect-[3/4] sm:aspect-[4/3] rounded-xl overflow-hidden border-2 border-border/50 bg-muted/30 shadow-inner">
+          <iframe
+            src={`${generatedPDF}#view=FitH`}
+            className="w-full h-full border-none"
+            title="Book Preview"
+          />
+        </div>
+
+        <div className="mt-4 text-center">
+          <p className="text-sm text-muted-foreground italic">
+            "A magical story created just for you..." ✨
+          </p>
         </div>
       </div>
     );

@@ -23,13 +23,15 @@ export const BookGenerator: React.FC = () => {
     setIsGenerating,
     generatedPDF,
     setGeneratedPDF,
+    coverImage,
+    setCoverImage,
     generationProgress,
     setGenerationProgress,
     reset
   } = useBookStore();
-  
+
   const { addToHistory } = useHistoryStore();
-  
+
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [generatedBlob, setGeneratedBlob] = useState<Blob | null>(null);
   const [showFinished, setShowFinished] = useState(false);
@@ -50,8 +52,9 @@ export const BookGenerator: React.FC = () => {
     try {
       setIsGenerating(true);
       setGenerationProgress(0);
+      setCoverImage(null);
 
-      const { pdfBlob, pdfUrl } = await startGenerationViaWebhook(
+      const { pdfBlob, pdfUrl, coverImageUrl } = await startGenerationViaWebhook(
         childName.trim(),
         selectedTheme,
         uploadedPhoto,
@@ -69,12 +72,16 @@ export const BookGenerator: React.FC = () => {
 
       if (!finalPdfUrl) throw new Error('No PDF returned from webhook');
 
+      if (coverImageUrl) {
+        setCoverImage(coverImageUrl);
+      }
+
       addToHistory({
         childName: childName.trim(),
         themeName: selectedTheme.name,
         themeEmoji: selectedTheme.emoji,
         pdfUrl: finalPdfUrl,
-        thumbnailUrl: processedPhoto?.thumbnail || ''
+        thumbnailUrl: coverImageUrl || processedPhoto?.thumbnail || ''
       });
 
       setGeneratedPDF(finalPdfUrl);
@@ -105,6 +112,7 @@ export const BookGenerator: React.FC = () => {
     setGeneratedBlob(null);
     setGenerationProgress(0);
     setShowFinished(false);
+    setCoverImage(null);
   };
 
   const isFormValid = childName.trim().length >= 2 && selectedTheme && uploadedPhoto;
@@ -168,7 +176,7 @@ export const BookGenerator: React.FC = () => {
               <Sparkles className="w-5 h-5" />
               {isGenerating ? 'Creating Magic...' : 'Generate Book'}
             </button>
-            
+
             {(generatedPDF || childName || selectedTheme || uploadedPhoto) && (
               <button
                 onClick={handleReset}

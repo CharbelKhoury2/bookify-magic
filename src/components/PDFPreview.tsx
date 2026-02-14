@@ -8,7 +8,7 @@ interface PDFPreviewProps {
 }
 
 export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
-  const { isGenerating, generatedPDF, childName, selectedTheme, generationProgress } = useBookStore();
+  const { isGenerating, generatedPDF, coverImage, childName, selectedTheme, generationProgress } = useBookStore();
 
   if (!isGenerating && !generatedPDF) {
     return null;
@@ -61,14 +61,38 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
           </button>
         </div>
 
-        <div className="book-frame group relative z-10 mx-auto max-w-4xl cursor-default">
-          <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none z-20" />
-          <div className="relative aspect-[3/4] sm:aspect-[4/3] rounded-lg overflow-hidden bg-white shadow-2xl">
-            <iframe
-              src={`${generatedPDF}#toolbar=0&navpanes=0&view=FitH`}
-              className="w-full h-full"
-              title="Book Preview"
-            />
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start relative z-10">
+          {/* Cover Image Section */}
+          {coverImage && (
+            <div className="md:col-span-4 lg:col-span-3">
+              <div className="space-y-3">
+                <p className="text-xs font-bold text-primary uppercase tracking-widest text-center md:text-left">Cover Art</p>
+                <div className="book-frame overflow-hidden aspect-[3/4] shadow-float hover:scale-[1.02] transition-transform duration-500">
+                  <img
+                    src={coverImage}
+                    alt="Book Cover"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* PDF Preview Section */}
+          <div className={coverImage ? "md:col-span-8 lg:col-span-9" : "md:col-span-12"}>
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-primary uppercase tracking-widest text-center md:text-left">Story Preview</p>
+              <div className="book-frame group mx-auto cursor-default">
+                <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none z-20" />
+                <div className="relative aspect-[3/4] sm:aspect-[4/3] rounded-lg overflow-hidden bg-white shadow-2xl">
+                  <iframe
+                    src={`${generatedPDF}#toolbar=0&navpanes=0&view=FitH`}
+                    className="w-full h-full"
+                    title="Book Preview"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

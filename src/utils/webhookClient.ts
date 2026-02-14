@@ -8,6 +8,8 @@ export interface GenerationStartResponse {
   pdfUrl?: string;
   pdfBase64?: string;
   pdfBlob?: Blob;
+  coverImageUrl?: string;
+  coverImageBase64?: string;
   message?: string;
 }
 
@@ -16,6 +18,8 @@ export interface GenerationStatusResponse {
   progress?: number;
   pdfUrl?: string;
   pdfBase64?: string;
+  coverImageUrl?: string;
+  coverImageBase64?: string;
   message?: string;
 }
 
@@ -88,7 +92,7 @@ export async function startGenerationViaWebhook(
   theme: Theme,
   photoFile: File,
   onProgress?: (p: number) => void
-): Promise<{ pdfBlob?: Blob; pdfUrl?: string }> {
+): Promise<{ pdfBlob?: Blob; pdfUrl?: string; coverImageUrl?: string }> {
   const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL as string | undefined;
   const statusUrlBase = import.meta.env.VITE_N8N_STATUS_URL as string | undefined;
   const statusMethod = ((import.meta.env.VITE_N8N_STATUS_METHOD as string | undefined) || 'GET').toUpperCase() as 'GET' | 'POST';
@@ -111,22 +115,30 @@ export async function startGenerationViaWebhook(
 
   const start: GenerationStartResponse = await postJson(webhookUrl, payload);
 
+  // If direct PDF binary response
   if (start.pdfBlob) {
     onProgress?.(100);
     return { pdfBlob: start.pdfBlob };
   }
 
+  // If synchronous response with URLs or Base64
   if (start.pdfBase64 || start.pdfUrl) {
     onProgress?.(90);
+    let coverImageUrl = start.coverImageUrl;
+    if (start.coverImageBase64) {
+      coverImageUrl = `data:image/jpeg;base64,${start.coverImageBase64.replace(/^data:image\/[a-z]+;base64,/, '')}`;
+    }
+
     if (start.pdfBase64) {
       const pdfBlob = base64ToBlob(start.pdfBase64, 'application/pdf');
       onProgress?.(100);
-      return { pdfBlob };
+      return { pdfBlob, coverImageUrl };
     }
     onProgress?.(100);
-    return { pdfUrl: start.pdfUrl };
+    return { pdfUrl: start.pdfUrl, coverImageUrl };
   }
 
+  // Polling logic
   const jobId = start.jobId;
   const statusUrl = start.statusUrl || (statusUrlBase && jobId ? `${statusUrlBase.replace(/\/$/, '')}/${jobId}` : undefined);
 
@@ -153,13 +165,18 @@ export async function startGenerationViaWebhook(
     }
 
     if (status.status === 'completed') {
+      let coverImageUrl = status.coverImageUrl;
+      if (status.coverImageBase64) {
+        coverImageUrl = `data:image/jpeg;base64,${status.coverImageBase64.replace(/^data:image\/[a-z]+;base64,/, '')}`;
+      }
+
       if (status.pdfBase64) {
         const pdfBlob = base64ToBlob(status.pdfBase64, 'application/pdf');
         onProgress?.(100);
-        return { pdfBlob };
+        return { pdfBlob, coverImageUrl };
       }
       onProgress?.(100);
-      return { pdfUrl: status.pdfUrl };
+      return { pdfUrl: status.pdfUrl, coverImageUrl };
     }
 
     if (status.status === 'failed') {

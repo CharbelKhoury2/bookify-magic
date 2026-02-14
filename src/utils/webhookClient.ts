@@ -1,6 +1,5 @@
 import { Theme } from './types';
 import { imageToBase64 } from './imageProcessor';
-import { supabase } from '@/integrations/supabase/client';
 
 export interface GenerationStartResponse {
   status?: string;
@@ -13,10 +12,17 @@ export interface GenerationStartResponse {
 
 export interface GenerationStatusResponse {
   status: 'queued' | 'running' | 'completed' | 'failed';
-  progress?: number; // 0-100 if provided by n8n
+  progress?: number;
   pdfUrl?: string;
   pdfBase64?: string;
   message?: string;
+}
+
+/**
+ * Strips the data URL prefix (e.g., "data:image/jpeg;base64,") from a base64 string.
+ */
+function stripBase64Prefix(base64: string): string {
+  return base64.replace(/^data:image\/[a-z]+;base64,/, '');
 }
 
 async function postJson(url: string, body: any) {
@@ -38,7 +44,7 @@ async function postJson(url: string, body: any) {
     }
   } catch (err: any) {
     if (err?.name === 'TypeError') {
-      throw new Error('Network or CORS error contacting webhook');
+      throw new Error('Network or CORS error contacting webhook. Please ensure the n8n webhook allows CORS from your domain.');
     }
     throw err;
   }
@@ -75,11 +81,17 @@ export async function startGenerationViaWebhook(
   photoFile: File,
   onProgress?: (p: number) => void
 ): Promise<{ pdfBlob?: Blob; pdfUrl?: string }> {
+  const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL as string | undefined;
   const statusUrlBase = import.meta.env.VITE_N8N_STATUS_URL as string | undefined;
   const statusMethod = ((import.meta.env.VITE_N8N_STATUS_METHOD as string | undefined) || 'GET').toUpperCase() as 'GET' | 'POST';
 
+  if (!webhookUrl) {
+    throw new Error('Missing VITE_N8N_WEBHOOK_URL env var');
+  }
+
   onProgress?.(5);
-  const photoBase64 = await imageToBase64(photoFile);
+  const fullBase64 = await imageToBase64(photoFile);
+  const photoBase64 = stripBase64Prefix(fullBase64);
   onProgress?.(10);
 
   const payload = {
@@ -87,35 +99,10 @@ export async function startGenerationViaWebhook(
     themeId: theme.id,
     themeName: theme.name,
     photoBase64,
-    photoMime:
-      photoFile.type ||
-      (photoBase64.match(/^data:([^;]+);/)?.[1] ?? 'application/octet-stream'),
+    photoMime: photoFile.type || 'image/jpeg',
   };
 
-  // Call through authenticated edge function proxy
-  const { data: sessionData } = await supabase.auth.getSession();
-  const accessToken = sessionData?.session?.access_token;
-  if (!accessToken) {
-    throw new Error('Please sign in to generate books');
-  }
-
-  const edgeFunctionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-book`;
-  const res = await fetch(edgeFunctionUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${accessToken}`,
-      'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const errBody = await res.json().catch(() => ({}));
-    throw new Error(errBody.error || 'Failed to generate book');
-  }
-
-  const start: GenerationStartResponse = await res.json();
+  const start: GenerationStartResponse = await postJson(webhookUrl, payload);
 
   // If synchronous result
   if (start.pdfBase64 || start.pdfUrl) {
@@ -152,7 +139,6 @@ export async function startGenerationViaWebhook(
     if (status.progress !== undefined) {
       onProgress?.(Math.min(99, Math.max(progressShown, status.progress)));
     } else {
-      // make gentle progress if no explicit progress
       progressShown = Math.min(95, progressShown + 3);
       onProgress?.(progressShown);
     }

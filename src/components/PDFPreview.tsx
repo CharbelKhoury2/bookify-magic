@@ -33,37 +33,53 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
 
   if (generatedPDF) {
     return (
-      <div className="card-magical animate-scale-in">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-success/20 flex items-center justify-center">
-              <FileText className="w-4 h-4 text-success" />
+      <div className="glass-card rounded-3xl p-6 sm:p-8 animate-scale-in relative overflow-hidden shadow-2xl border-white/50">
+        <div className="premium-blur -top-20 -right-20" />
+        <div className="premium-blurBottom -bottom-20 -left-20" />
+
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 relative z-10">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl gradient-magic flex items-center justify-center shadow-glow animate-float">
+              <FileText className="w-6 h-6 text-white" />
             </div>
-            <h3 className="font-bold text-foreground">
-              {childName}'s {selectedTheme?.name}
-            </h3>
+            <div>
+              <h3 className="text-xl font-display font-bold text-foreground leading-tight">
+                {childName}'s Adventure
+              </h3>
+              <p className="text-sm text-primary font-medium opacity-80 uppercase tracking-wider">
+                {selectedTheme?.name} Edition
+              </p>
+            </div>
           </div>
+
           <button
             onClick={onDownload}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/20 transition-colors"
+            className="w-full sm:w-auto btn-magic flex items-center justify-center gap-2 shadow-lg"
           >
-            <Download className="w-4 h-4" />
-            Download
+            <Download className="w-5 h-5" />
+            Download Book
           </button>
         </div>
 
-        <div className="relative w-full aspect-[3/4] sm:aspect-[4/3] rounded-xl overflow-hidden border-2 border-border/50 bg-muted/30 shadow-inner">
-          <iframe
-            src={`${generatedPDF}#view=FitH`}
-            className="w-full h-full border-none"
-            title="Book Preview"
-          />
+        <div className="book-frame group relative z-10 mx-auto max-w-4xl cursor-default">
+          <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none z-20" />
+          <div className="relative aspect-[3/4] sm:aspect-[4/3] rounded-lg overflow-hidden bg-white shadow-2xl">
+            <iframe
+              src={`${generatedPDF}#toolbar=0&navpanes=0&view=FitH`}
+              className="w-full h-full"
+              title="Book Preview"
+            />
+          </div>
         </div>
 
-        <div className="mt-4 text-center">
-          <p className="text-sm text-muted-foreground italic">
-            "A magical story created just for you..." ✨
-          </p>
+        <div className="mt-8 text-center relative z-10">
+          <div className="inline-block px-6 py-2 rounded-full bg-primary/5 border border-primary/10 shadow-sm">
+            <p className="text-sm font-medium text-primary-foreground/70 italic flex items-center gap-2">
+              <span className="animate-sparkle">✨</span>
+              A magical story created just for {childName}
+              <span className="animate-sparkle">✨</span>
+            </p>
+          </div>
         </div>
       </div>
     );

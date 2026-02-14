@@ -2,7 +2,6 @@ import React from 'react';
 import { FileText, Download } from 'lucide-react';
 import { useBookStore } from '../store/bookStore';
 import { LoadingSpinner } from './LoadingSpinner';
-import { ProgressBar } from './ProgressBar';
 
 interface PDFPreviewProps {
   onDownload: () => void;
@@ -25,12 +24,9 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
         <h3 className="text-xl font-bold text-foreground mb-2">
           Creating Your Magical Book ✨
         </h3>
-        <p className="text-muted-foreground text-center max-w-xs mb-6">
+        <p className="text-muted-foreground text-center max-w-xs">
           Crafting beautiful pages with your story...
         </p>
-        <div className="w-full max-w-md">
-          <ProgressBar value={generationProgress} label="Generating" />
-        </div>
       </div>
     );
   }

@@ -49,6 +49,8 @@ export interface HistoryItem {
   timestamp: number;
   pdfUrl: string;
   thumbnailUrl: string;
+  pdfDownloadUrl?: string;
+  coverDownloadUrl?: string;
 }
 
 export interface GenerationState {

@@ -105,12 +105,15 @@ export const BookGenerator: React.FC = () => {
         hasCoverDownload: !!downloadCoverUrl
       });
 
+      // Save to history with download URLs
       addToHistory({
         childName: childName.trim(),
         themeName: selectedTheme.name,
         themeEmoji: selectedTheme.emoji,
         pdfUrl: finalPdfUrl,
-        thumbnailUrl: coverImageUrl || processedPhoto?.thumbnail || ''
+        thumbnailUrl: coverImageUrl || processedPhoto?.thumbnail || '',
+        pdfDownloadUrl: downloadPdfUrl,
+        coverDownloadUrl: downloadCoverUrl
       });
 
       setGeneratedPDF(finalPdfUrl);

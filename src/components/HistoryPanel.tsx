@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, Download, Trash2 } from 'lucide-react';
+import { Clock, Download, Trash2, Image } from 'lucide-react';
 import { useHistoryStore } from '../store/historyStore';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -29,6 +29,7 @@ export const HistoryPanel: React.FC = () => {
         <div className="flex items-center gap-3">
           <Clock className="w-5 h-5 text-primary" />
           <h2 className="text-lg font-bold text-foreground">Recent Books</h2>
+          <span className="text-xs text-muted-foreground">({history.length} saved)</span>
         </div>
         <button
           onClick={clearHistory}
@@ -60,12 +61,30 @@ interface HistoryCardProps {
     timestamp: number;
     pdfUrl: string;
     thumbnailUrl: string;
+    pdfDownloadUrl?: string;
+    coverDownloadUrl?: string;
   };
   onRemove: () => void;
 }
 
 const HistoryCard: React.FC<HistoryCardProps> = ({ item, onRemove }) => {
   const timeAgo = formatDistanceToNow(item.timestamp, { addSuffix: true });
+
+  const handleDownloadPDF = () => {
+    const url = item.pdfDownloadUrl || item.pdfUrl;
+    if (url) {
+      window.open(url, '_blank');
+      console.log('📥 Downloading PDF from history:', url);
+    }
+  };
+
+  const handleDownloadCover = () => {
+    const url = item.coverDownloadUrl || item.thumbnailUrl;
+    if (url) {
+      window.open(url, '_blank');
+      console.log('📥 Downloading cover from history:', url);
+    }
+  };
 
   return (
     <div className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors group">
@@ -80,7 +99,7 @@ const HistoryCard: React.FC<HistoryCardProps> = ({ item, onRemove }) => {
           {item.themeEmoji}
         </div>
       )}
-      
+
       <div className="flex-1 min-w-0">
         <h4 className="font-semibold text-foreground text-sm truncate">
           {item.childName}'s {item.themeName}
@@ -89,16 +108,29 @@ const HistoryCard: React.FC<HistoryCardProps> = ({ item, onRemove }) => {
       </div>
 
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        {item.pdfUrl && (
-          <a
-            href={item.pdfUrl}
-            download={`${item.childName}_${item.themeName}.pdf`}
+        {/* Download PDF Button */}
+        {(item.pdfUrl || item.pdfDownloadUrl) && (
+          <button
+            onClick={handleDownloadPDF}
             className="p-2 hover:bg-primary/10 rounded-lg transition-colors"
-            title="Download"
+            title="Download Story"
           >
             <Download className="w-4 h-4 text-primary" />
-          </a>
+          </button>
         )}
+
+        {/* Download Cover Button */}
+        {(item.thumbnailUrl || item.coverDownloadUrl) && (
+          <button
+            onClick={handleDownloadCover}
+            className="p-2 hover:bg-primary/10 rounded-lg transition-colors"
+            title="Download Cover"
+          >
+            <Image className="w-4 h-4 text-primary" />
+          </button>
+        )}
+
+        {/* Remove Button */}
         <button
           onClick={onRemove}
           className="p-2 hover:bg-destructive/10 rounded-lg transition-colors"

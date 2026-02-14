@@ -7,7 +7,7 @@ export interface GenerationStartResponse {
   statusUrl?: string;
   pdfUrl?: string;
   pdfBase64?: string;
-  pdfBlob?: Blob; // Added for direct binary responses
+  pdfBlob?: Blob;
   message?: string;
 }
 
@@ -20,15 +20,25 @@ export interface GenerationStatusResponse {
 }
 
 async function postJson(url: string, body: any): Promise<any> {
+  console.log('🚀 Sending book request to Webhook:', url);
+  console.log('📦 Data being sent:', {
+    ...body,
+    photoBase64: body.photoBase64?.substring(0, 50) + '...'
+  });
+
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, application/pdf'
+      },
       body: JSON.stringify(body),
     });
 
-    // Check if the response is a direct PDF binary
     const contentType = res.headers.get('content-type');
+    console.log('📥 Received Response Status:', res.status, '(' + contentType + ')');
+
     if (res.ok && contentType?.includes('application/pdf')) {
       const blob = await res.blob();
       return { pdfBlob: blob, status: 'completed' };
@@ -36,19 +46,21 @@ async function postJson(url: string, body: any): Promise<any> {
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      throw new Error(`Webhook error ${res.status}: ${text.slice(0, 200)}`);
+      console.error('❌ Webhook error response:', text);
+      throw new Error(`Server returned error ${res.status}: ${text.slice(0, 100)}`);
     }
 
     const text = await res.text();
     try {
       return JSON.parse(text);
     } catch {
-      // Provide the actual response text to help debugging
-      throw new Error(`Webhook returned text instead of JSON: "${text.slice(0, 100)}${text.length > 100 ? '...' : ''}"`);
+      console.warn('⚠️ Webhook returned non-JSON text:', text);
+      throw new Error(`Webhook returned text instead of JSON: "${text.slice(0, 50)}..."`);
     }
   } catch (err: any) {
+    console.error('🚨 Connection Error:', err);
     if (err?.name === 'TypeError') {
-      throw new Error('Network or CORS error contacting webhook. Please ensure the n8n webhook allows CORS from your domain.');
+      throw new Error('Network/CORS error. Please ensure n8n allows requests from this domain or use the Supabase proxy.');
     }
     throw err;
   }
@@ -63,18 +75,10 @@ async function getJson(url: string, method: 'GET' | 'POST' = 'GET', body?: any) 
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      throw new Error(`Status error ${res.status}${text ? `: ${text.slice(0, 200)}` : ''}`);
+      throw new Error(`Status error ${res.status}: ${text.slice(0, 100)}`);
     }
-    try {
-      return await res.json();
-    } catch {
-      const text = await res.text().catch(() => '');
-      throw new Error(`Status endpoint returned non-JSON response${text ? `: ${text.slice(0, 100)}` : ''}`);
-    }
+    return await res.json();
   } catch (err: any) {
-    if (err?.name === 'TypeError') {
-      throw new Error('Network or CORS error contacting status endpoint');
-    }
     throw err;
   }
 }
@@ -90,16 +94,15 @@ export async function startGenerationViaWebhook(
   const statusMethod = ((import.meta.env.VITE_N8N_STATUS_METHOD as string | undefined) || 'GET').toUpperCase() as 'GET' | 'POST';
 
   if (!webhookUrl) {
-    throw new Error('Missing VITE_N8N_WEBHOOK_URL env var');
+    throw new Error('Missing VITE_N8N_WEBHOOK_URL in .env file');
   }
 
   onProgress?.(5);
-  // Keep the full data URL prefix as it's more standard for n8n/browser interactions
   const photoBase64 = await imageToBase64(photoFile);
   onProgress?.(10);
 
   const payload = {
-    childName,
+    childName: childName.trim(),
     themeId: theme.id,
     themeName: theme.name,
     photoBase64,
@@ -108,13 +111,11 @@ export async function startGenerationViaWebhook(
 
   const start: GenerationStartResponse = await postJson(webhookUrl, payload);
 
-  // If synchronous PDF blob (direct binary response)
   if (start.pdfBlob) {
     onProgress?.(100);
     return { pdfBlob: start.pdfBlob };
   }
 
-  // If synchronous JSON result
   if (start.pdfBase64 || start.pdfUrl) {
     onProgress?.(90);
     if (start.pdfBase64) {
@@ -126,18 +127,16 @@ export async function startGenerationViaWebhook(
     return { pdfUrl: start.pdfUrl };
   }
 
-  // Otherwise poll for status
   const jobId = start.jobId;
   const statusUrl = start.statusUrl || (statusUrlBase && jobId ? `${statusUrlBase.replace(/\/$/, '')}/${jobId}` : undefined);
+
   if (!statusUrl) {
-    throw new Error('Webhook did not return statusUrl or jobId; cannot poll.');
+    throw new Error('Generation started, but no status URL provided by n8n.');
   }
 
   let progressShown = 15;
-  onProgress?.(progressShown);
-
-  const maxWaitMs = 5 * 60 * 1000; // 5 minutes
   const startTime = Date.now();
+  const maxWaitMs = 5 * 60 * 1000;
 
   while (Date.now() - startTime < maxWaitMs) {
     const status: GenerationStatusResponse = await getJson(
@@ -164,27 +163,21 @@ export async function startGenerationViaWebhook(
     }
 
     if (status.status === 'failed') {
-      throw new Error(status.message || 'Generation failed');
+      throw new Error(status.message || 'Generation failed in n8n');
     }
 
-    await delay(2000);
+    await new Promise(r => setTimeout(r, 2000));
   }
 
-  throw new Error('Generation timed out');
-}
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  throw new Error('Generation timed out after 5 minutes');
 }
 
 function base64ToBlob(base64: string, mime: string) {
-  // Check if it's a full data URL and strip it if so
   const actualBase64 = base64.includes(',') ? base64.split(',')[1] : base64;
   const byteChars = atob(actualBase64);
   const byteNumbers = new Array(byteChars.length);
   for (let i = 0; i < byteChars.length; i++) {
     byteNumbers[i] = byteChars.charCodeAt(i);
   }
-  const byteArray = new Uint8Array(byteNumbers);
-  return new Blob([byteArray], { type: mime });
+  return new Blob([new Uint8Array(byteNumbers)], { type: mime });
 }

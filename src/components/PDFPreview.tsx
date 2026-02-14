@@ -1,5 +1,5 @@
-import React from 'react';
-import { FileText, Download, Image } from 'lucide-react';
+import React, { useState } from 'react';
+import { FileText, Download, Image, Loader2 } from 'lucide-react';
 import { useBookStore } from '../store/bookStore';
 import { LoadingSpinner } from './LoadingSpinner';
 
@@ -19,24 +19,55 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
     coverDownloadUrl
   } = useBookStore();
 
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
+  const [downloadingCover, setDownloadingCover] = useState(false);
+
+  const downloadFile = async (url: string, filename: string, setLoading: (loading: boolean) => void) => {
+    try {
+      setLoading(true);
+      console.log('📥 Downloading file from:', url);
+
+      // Fetch the file
+      const response = await fetch(url);
+      const blob = await response.blob();
+
+      // Create a temporary URL for the blob
+      const blobUrl = window.URL.createObjectURL(blob);
+
+      // Create a temporary anchor element and trigger download
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+
+      console.log('✅ Download initiated for:', filename);
+    } catch (error) {
+      console.error('❌ Download failed:', error);
+      // Fallback: open in new tab if download fails (e.g., CORS issues)
+      window.open(url, '_blank');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDownloadCover = () => {
-    if (coverDownloadUrl) {
-      console.log('📥 Downloading cover from URL:', coverDownloadUrl);
-      // Open the cover download URL in a new tab
-      window.open(coverDownloadUrl, '_blank');
-    } else if (coverImage) {
-      console.log('📥 Downloading cover from preview URL:', coverImage);
-      // Fallback to the preview image if no download URL
-      window.open(coverImage, '_blank');
+    const url = coverDownloadUrl || coverImage;
+    if (url && !downloadingCover) {
+      const filename = `${childName}_${selectedTheme?.name} _Cover.png`;
+      downloadFile(url, filename, setDownloadingCover);
     }
   };
 
   const handleDownloadPDF = () => {
-    if (pdfDownloadUrl) {
-      console.log('📥 Downloading PDF from URL:', pdfDownloadUrl);
-      // Open the PDF download URL in a new tab
-      window.open(pdfDownloadUrl, '_blank');
-    } else {
+    if (pdfDownloadUrl && !downloadingPDF) {
+      const filename = `${childName}_${selectedTheme?.name} _Story.pdf`;
+      downloadFile(pdfDownloadUrl, filename, setDownloadingPDF);
+    } else if (!pdfDownloadUrl) {
       console.log('📥 Downloading PDF using fallback handler');
       // Fallback to the original download handler
       onDownload();
@@ -87,21 +118,49 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
 
           {/* Download Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            {/* PDF Download Button - Primary */}
             <button
               onClick={handleDownloadPDF}
-              className="w-full sm:w-auto btn-magic flex items-center justify-center gap-2 shadow-lg"
+              disabled={downloadingPDF}
+              className="group relative w-full sm:w-auto px-8 py-4 rounded-2xl font-bold text-white overflow-hidden shadow-2xl hover:shadow-primary/50 transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+              }}
             >
-              <Download className="w-5 h-5" />
-              Download Story
+              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+              <div className="relative flex items-center justify-center gap-3">
+                {downloadingPDF ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Download className="w-5 h-5 group-hover:animate-bounce" />
+                )}
+                <span className="text-base">{downloadingPDF ? 'Downloading...' : 'Download Story'}</span>
+              </div>
             </button>
 
+            {/* Cover Download Button - Secondary */}
             {(coverDownloadUrl || coverImage) && (
               <button
                 onClick={handleDownloadCover}
-                className="w-full sm:w-auto px-6 py-3 rounded-xl border-2 border-primary/30 bg-primary/5 text-primary font-semibold hover:bg-primary/10 hover:border-primary/50 transition-all flex items-center justify-center gap-2 shadow-md"
+                disabled={downloadingCover}
+                className="group relative w-full sm:w-auto px-8 py-4 rounded-2xl font-bold overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                  border: '2px solid rgba(102, 126, 234, 0.3)',
+                  backdropFilter: 'blur(10px)'
+                }}
               >
-                <Image className="w-5 h-5" />
-                Download Cover
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 translate-x-full group-hover:translate-x-0 transition-transform duration-300" />
+                <div className="relative flex items-center justify-center gap-3">
+                  {downloadingCover ? (
+                    <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#667eea' }} />
+                  ) : (
+                    <Image className="w-5 h-5 group-hover:rotate-12 transition-transform duration-300" style={{ color: '#667eea' }} />
+                  )}
+                  <span className="text-base" style={{ color: '#667eea' }}>
+                    {downloadingCover ? 'Downloading...' : 'Download Cover'}
+                  </span>
+                </div>
               </button>
             )}
           </div>
@@ -132,7 +191,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
                 <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none z-20" />
                 <div className="relative aspect-[3/4] sm:aspect-[4/3] rounded-lg overflow-hidden bg-white shadow-2xl">
                   <iframe
-                    src={`${generatedPDF}#toolbar=0&navpanes=0&view=FitH`}
+                    src={`${generatedPDF} #toolbar = 0 & navpanes=0 & view=FitH`}
                     className="w-full h-full"
                     title="Book Preview"
                   />

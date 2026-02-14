@@ -7,6 +7,7 @@ export interface GenerationStartResponse {
   statusUrl?: string;
   pdfUrl?: string;
   pdfBase64?: string;
+  pdfBlob?: Blob; // Added for direct binary responses
   message?: string;
 }
 
@@ -18,29 +19,32 @@ export interface GenerationStatusResponse {
   message?: string;
 }
 
-/**
- * Strips the data URL prefix (e.g., "data:image/jpeg;base64,") from a base64 string.
- */
-function stripBase64Prefix(base64: string): string {
-  return base64.replace(/^data:image\/[a-z]+;base64,/, '');
-}
-
-async function postJson(url: string, body: any) {
+async function postJson(url: string, body: any): Promise<any> {
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
+
+    // Check if the response is a direct PDF binary
+    const contentType = res.headers.get('content-type');
+    if (res.ok && contentType?.includes('application/pdf')) {
+      const blob = await res.blob();
+      return { pdfBlob: blob, status: 'completed' };
+    }
+
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      throw new Error(`Webhook error ${res.status}${text ? `: ${text.slice(0, 200)}` : ''}`);
+      throw new Error(`Webhook error ${res.status}: ${text.slice(0, 200)}`);
     }
+
+    const text = await res.text();
     try {
-      return await res.json();
+      return JSON.parse(text);
     } catch {
-      const text = await res.text().catch(() => '');
-      throw new Error(`Webhook returned non-JSON response${text ? `: ${text.slice(0, 200)}` : ''}`);
+      // Provide the actual response text to help debugging
+      throw new Error(`Webhook returned text instead of JSON: "${text.slice(0, 100)}${text.length > 100 ? '...' : ''}"`);
     }
   } catch (err: any) {
     if (err?.name === 'TypeError') {
@@ -65,7 +69,7 @@ async function getJson(url: string, method: 'GET' | 'POST' = 'GET', body?: any) 
       return await res.json();
     } catch {
       const text = await res.text().catch(() => '');
-      throw new Error(`Status endpoint returned non-JSON response${text ? `: ${text.slice(0, 200)}` : ''}`);
+      throw new Error(`Status endpoint returned non-JSON response${text ? `: ${text.slice(0, 100)}` : ''}`);
     }
   } catch (err: any) {
     if (err?.name === 'TypeError') {
@@ -90,8 +94,8 @@ export async function startGenerationViaWebhook(
   }
 
   onProgress?.(5);
-  const fullBase64 = await imageToBase64(photoFile);
-  const photoBase64 = stripBase64Prefix(fullBase64);
+  // Keep the full data URL prefix as it's more standard for n8n/browser interactions
+  const photoBase64 = await imageToBase64(photoFile);
   onProgress?.(10);
 
   const payload = {
@@ -104,7 +108,13 @@ export async function startGenerationViaWebhook(
 
   const start: GenerationStartResponse = await postJson(webhookUrl, payload);
 
-  // If synchronous result
+  // If synchronous PDF blob (direct binary response)
+  if (start.pdfBlob) {
+    onProgress?.(100);
+    return { pdfBlob: start.pdfBlob };
+  }
+
+  // If synchronous JSON result
   if (start.pdfBase64 || start.pdfUrl) {
     onProgress?.(90);
     if (start.pdfBase64) {
@@ -168,7 +178,9 @@ function delay(ms: number) {
 }
 
 function base64ToBlob(base64: string, mime: string) {
-  const byteChars = atob(base64);
+  // Check if it's a full data URL and strip it if so
+  const actualBase64 = base64.includes(',') ? base64.split(',')[1] : base64;
+  const byteChars = atob(actualBase64);
   const byteNumbers = new Array(byteChars.length);
   for (let i = 0; i < byteChars.length; i++) {
     byteNumbers[i] = byteChars.charCodeAt(i);

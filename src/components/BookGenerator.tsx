@@ -27,6 +27,12 @@ export const BookGenerator: React.FC = () => {
     setCoverImage,
     generationProgress,
     setGenerationProgress,
+    pdfDownloadUrl,
+    setPdfDownloadUrl,
+    pdfDownloadBlob,
+    setPdfDownloadBlob,
+    coverDownloadUrl,
+    setCoverDownloadUrl,
     reset
   } = useBookStore();
 
@@ -53,8 +59,11 @@ export const BookGenerator: React.FC = () => {
       setIsGenerating(true);
       setGenerationProgress(0);
       setCoverImage(null);
+      setPdfDownloadUrl(null);
+      setPdfDownloadBlob(null);
+      setCoverDownloadUrl(null);
 
-      const { pdfBlob, pdfUrl, coverImageUrl } = await startGenerationViaWebhook(
+      const { pdfBlob, pdfUrl, coverImageUrl, pdfDownloadUrl: downloadPdfUrl, coverDownloadUrl: downloadCoverUrl } = await startGenerationViaWebhook(
         childName.trim(),
         selectedTheme,
         uploadedPhoto,
@@ -66,6 +75,7 @@ export const BookGenerator: React.FC = () => {
         const url = URL.createObjectURL(pdfBlob);
         finalPdfUrl = url;
         setGeneratedBlob(pdfBlob);
+        setPdfDownloadBlob(pdfBlob);
       } else if (pdfUrl) {
         finalPdfUrl = pdfUrl;
       }
@@ -74,7 +84,26 @@ export const BookGenerator: React.FC = () => {
 
       if (coverImageUrl) {
         setCoverImage(coverImageUrl);
+        console.log('✅ Cover image set for preview:', coverImageUrl);
       }
+
+      // Store download URLs for both files
+      if (downloadPdfUrl) {
+        setPdfDownloadUrl(downloadPdfUrl);
+        console.log('✅ PDF download URL stored:', downloadPdfUrl);
+      }
+      if (downloadCoverUrl) {
+        setCoverDownloadUrl(downloadCoverUrl);
+        console.log('✅ Cover download URL stored:', downloadCoverUrl);
+      }
+
+      // Log summary of what was received
+      console.log('📊 Generation complete - Files received:', {
+        hasPdfPreview: !!finalPdfUrl,
+        hasCoverPreview: !!coverImageUrl,
+        hasPdfDownload: !!downloadPdfUrl,
+        hasCoverDownload: !!downloadCoverUrl
+      });
 
       addToHistory({
         childName: childName.trim(),
@@ -113,6 +142,9 @@ export const BookGenerator: React.FC = () => {
     setGenerationProgress(0);
     setShowFinished(false);
     setCoverImage(null);
+    setPdfDownloadUrl(null);
+    setPdfDownloadBlob(null);
+    setCoverDownloadUrl(null);
   };
 
   const isFormValid = childName.trim().length >= 2 && selectedTheme && uploadedPhoto;

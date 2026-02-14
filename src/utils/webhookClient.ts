@@ -55,8 +55,11 @@ async function postJson(url: string, body: any): Promise<any> {
     }
 
     const text = await res.text();
+    console.log('📄 Raw response text (first 500 chars):', text.substring(0, 500));
     try {
-      return JSON.parse(text);
+      const parsed = JSON.parse(text);
+      console.log('✅ Parsed JSON response:', parsed);
+      return parsed;
     } catch {
       console.warn('⚠️ Webhook returned non-JSON text:', text);
       throw new Error(`Webhook returned text instead of JSON: "${text.slice(0, 50)}..."`);
@@ -92,7 +95,13 @@ export async function startGenerationViaWebhook(
   theme: Theme,
   photoFile: File,
   onProgress?: (p: number) => void
-): Promise<{ pdfBlob?: Blob; pdfUrl?: string; coverImageUrl?: string }> {
+): Promise<{
+  pdfBlob?: Blob;
+  pdfUrl?: string;
+  coverImageUrl?: string;
+  pdfDownloadUrl?: string;
+  coverDownloadUrl?: string;
+}> {
   const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL as string | undefined;
   const statusUrlBase = import.meta.env.VITE_N8N_STATUS_URL as string | undefined;
   const statusMethod = ((import.meta.env.VITE_N8N_STATUS_METHOD as string | undefined) || 'GET').toUpperCase() as 'GET' | 'POST';
@@ -121,7 +130,62 @@ export async function startGenerationViaWebhook(
     return { pdfBlob: start.pdfBlob };
   }
 
-  // If synchronous response with URLs or Base64
+  // Check if response is an array (new backend format with both cover and PDF)
+  if (Array.isArray(start)) {
+    console.log('📦 Received array response with', start.length, 'items:', start);
+
+    // Extract both cover image and PDF from the array
+    // Cover object has 'images' array, PDF object has 'url' and 'name' ending in .pdf
+    const coverObj = start.find((item: any) => item.images && Array.isArray(item.images));
+    const pdfObj = start.find((item: any) => item.url && item.name && item.name.endsWith('.pdf'));
+
+    console.log('🖼️ Cover object found:', coverObj);
+    console.log('📄 PDF object found:', pdfObj);
+
+    let coverImageUrl: string | undefined;
+    let coverDownloadUrl: string | undefined;
+    let pdfDownloadUrl: string | undefined;
+    let pdfPreviewUrl: string | undefined;
+
+    // Extract cover image URLs
+    if (coverObj?.images?.[0]?.url) {
+      coverImageUrl = coverObj.images[0].url;
+      coverDownloadUrl = coverObj.images[0].url;
+      console.log('✅ Cover image URL extracted:', coverImageUrl);
+    } else {
+      console.warn('⚠️ No cover image found in array response');
+    }
+
+    // Extract PDF URLs
+    if (pdfObj?.url) {
+      pdfDownloadUrl = pdfObj.url;
+      pdfPreviewUrl = pdfObj.url;
+      console.log('✅ PDF URL extracted:', pdfDownloadUrl);
+    } else {
+      console.error('❌ No PDF object found in array response');
+      throw new Error('Backend returned array but no PDF file was found');
+    }
+
+    // Log final extracted data
+    console.log('🎉 Successfully extracted both files:', {
+      coverImageUrl,
+      coverDownloadUrl,
+      pdfPreviewUrl,
+      pdfDownloadUrl,
+      hasCover: !!coverImageUrl,
+      hasPDF: !!pdfDownloadUrl
+    });
+
+    onProgress?.(100);
+    return {
+      pdfUrl: pdfPreviewUrl,
+      coverImageUrl,
+      pdfDownloadUrl,
+      coverDownloadUrl
+    };
+  }
+
+  // If synchronous response with URLs or Base64 (old format)
   if (start.pdfBase64 || start.pdfUrl) {
     onProgress?.(90);
     let coverImageUrl = start.coverImageUrl;

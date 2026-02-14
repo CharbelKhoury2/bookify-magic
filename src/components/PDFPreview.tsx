@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Download } from 'lucide-react';
+import { FileText, Download, Image } from 'lucide-react';
 import { useBookStore } from '../store/bookStore';
 import { LoadingSpinner } from './LoadingSpinner';
 
@@ -8,7 +8,40 @@ interface PDFPreviewProps {
 }
 
 export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
-  const { isGenerating, generatedPDF, coverImage, childName, selectedTheme, generationProgress } = useBookStore();
+  const {
+    isGenerating,
+    generatedPDF,
+    coverImage,
+    childName,
+    selectedTheme,
+    generationProgress,
+    pdfDownloadUrl,
+    coverDownloadUrl
+  } = useBookStore();
+
+  const handleDownloadCover = () => {
+    if (coverDownloadUrl) {
+      console.log('📥 Downloading cover from URL:', coverDownloadUrl);
+      // Open the cover download URL in a new tab
+      window.open(coverDownloadUrl, '_blank');
+    } else if (coverImage) {
+      console.log('📥 Downloading cover from preview URL:', coverImage);
+      // Fallback to the preview image if no download URL
+      window.open(coverImage, '_blank');
+    }
+  };
+
+  const handleDownloadPDF = () => {
+    if (pdfDownloadUrl) {
+      console.log('📥 Downloading PDF from URL:', pdfDownloadUrl);
+      // Open the PDF download URL in a new tab
+      window.open(pdfDownloadUrl, '_blank');
+    } else {
+      console.log('📥 Downloading PDF using fallback handler');
+      // Fallback to the original download handler
+      onDownload();
+    }
+  };
 
   if (!isGenerating && !generatedPDF) {
     return null;
@@ -52,13 +85,26 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
             </div>
           </div>
 
-          <button
-            onClick={onDownload}
-            className="w-full sm:w-auto btn-magic flex items-center justify-center gap-2 shadow-lg"
-          >
-            <Download className="w-5 h-5" />
-            Download Book
-          </button>
+          {/* Download Buttons */}
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <button
+              onClick={handleDownloadPDF}
+              className="w-full sm:w-auto btn-magic flex items-center justify-center gap-2 shadow-lg"
+            >
+              <Download className="w-5 h-5" />
+              Download Story
+            </button>
+
+            {(coverDownloadUrl || coverImage) && (
+              <button
+                onClick={handleDownloadCover}
+                className="w-full sm:w-auto px-6 py-3 rounded-xl border-2 border-primary/30 bg-primary/5 text-primary font-semibold hover:bg-primary/10 hover:border-primary/50 transition-all flex items-center justify-center gap-2 shadow-md"
+              >
+                <Image className="w-5 h-5" />
+                Download Cover
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start relative z-10">

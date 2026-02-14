@@ -1,44 +1,26 @@
 import React from 'react';
+import { THEMES } from '../data/themes';
 import { Theme } from '../utils/types';
 import { useBookStore } from '../store/bookStore';
-import { useThemes } from '@/hooks/useThemes';
 
 export const ThemeSelector: React.FC = () => {
   const { selectedTheme, setSelectedTheme } = useBookStore();
-  const { data: dbThemes, isLoading } = useThemes();
-
-  const themes: Theme[] = (dbThemes ?? []).map((t) => ({
-    id: t.id,
-    name: t.name,
-    emoji: t.emoji,
-    description: t.description,
-    colors: {
-      primary: t.color_primary,
-      secondary: t.color_secondary,
-      accent: t.color_accent,
-      background: t.color_background,
-    },
-  }));
 
   return (
     <div className="space-y-4">
       <label className="block text-lg font-semibold text-foreground">
         Choose a Story Theme ✨
       </label>
-      {isLoading ? (
-        <p className="text-muted-foreground text-sm">Loading themes...</p>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {themes.map((theme) => (
-            <ThemeCard
-              key={theme.id}
-              theme={theme}
-              isSelected={selectedTheme?.id === theme.id}
-              onClick={() => setSelectedTheme(theme)}
-            />
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {THEMES.map((theme) => (
+          <ThemeCard
+            key={theme.id}
+            theme={theme}
+            isSelected={selectedTheme?.id === theme.id}
+            onClick={() => setSelectedTheme(theme)}
+          />
+        ))}
+      </div>
     </div>
   );
 };

@@ -5,10 +5,6 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { useAuth } from './hooks/useAuth';
 import { BookOpen, User, LogOut } from 'lucide-react';
 import Auth from './pages/Auth';
-import { AdminGuard } from './components/admin/AdminGuard';
-import { AdminLayout } from './components/admin/AdminLayout';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import AdminThemes from './pages/admin/AdminThemes';
 
 function HomePage() {
   const { user, loading, signOut } = useAuth();
@@ -82,10 +78,6 @@ function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/auth" element={<Auth />} />
-        <Route path="/admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
-          <Route index element={<AdminDashboard />} />
-          <Route path="themes" element={<AdminThemes />} />
-        </Route>
       </Routes>
     </BrowserRouter>
   );

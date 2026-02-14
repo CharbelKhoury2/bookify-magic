@@ -48,20 +48,6 @@ Deno.serve(async (req) => {
     // Forward the request body to n8n
     const body = await req.json();
 
-    // Log the generation to book_generations using service role
-    const serviceClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
-    const userId = data.claims.sub as string;
-    await serviceClient.from("book_generations").insert({
-      user_id: userId,
-      child_name: body.childName || "Unknown",
-      theme_id: body.themeId || "unknown",
-      theme_name: body.themeName || "Unknown",
-      status: "pending",
-    });
-
     const n8nRes = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

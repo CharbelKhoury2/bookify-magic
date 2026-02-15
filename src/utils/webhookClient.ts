@@ -61,8 +61,12 @@ async function postJson(url: string, body: any): Promise<any> {
       console.log('✅ Parsed JSON response:', parsed);
       return parsed;
     } catch {
-      console.warn('⚠️ Webhook returned non-JSON text:', text);
-      throw new Error(`Webhook returned text instead of JSON: "${text.slice(0, 50)}..."`);
+      console.log('ℹ️ Webhook returned raw text, checking if it is a URL or Base64');
+      // If it's a URL or base64, return it in a format the caller can use
+      if (text.trim().startsWith('http')) return { pdfUrl: text.trim() };
+      if (text.length > 500) return { pdfBase64: text.trim() };
+
+      throw new Error(`Webhook returned unparseable text: "${text.slice(0, 100)}..."`);
     }
   } catch (err: any) {
     console.error('🚨 Connection Error:', err);
@@ -130,76 +134,69 @@ export async function startGenerationViaWebhook(
     return { pdfBlob: start.pdfBlob };
   }
 
-  // Check if response is an array (new backend format with both cover and PDF)
-  if (Array.isArray(start)) {
-    console.log('📦 Received array response with', start.length, 'items:', start);
+  // 1. Array-like response (common in n8n/multi-file uploads)
+  // 1. Array-like response (common in n8n/multi-file uploads)
+  const s = start as any;
+  const items = Array.isArray(start) ? start : (s.files || s.items || (s.result && Array.isArray(s.result) ? s.result : null));
 
-    // Extract both cover image and PDF from the array
-    // Cover object has 'images' array, PDF object has 'url' and 'name' ending in .pdf
-    const coverObj = start.find((item: any) => item.images && Array.isArray(item.images));
-    const pdfObj = start.find((item: any) => item.url && item.name && item.name.endsWith('.pdf'));
+  if (items && Array.isArray(items)) {
+    console.log('📦 Processing items from response:', items.length);
 
-    console.log('🖼️ Cover object found:', coverObj);
-    console.log('📄 PDF object found:', pdfObj);
+    const pdfItem = items.find((item: any) =>
+      (item.mimeType === 'application/pdf') ||
+      (item.name?.toLowerCase().endsWith('.pdf')) ||
+      (item.contentType === 'application/pdf') ||
+      (typeof item === 'string' && (item.endsWith('.pdf') || item.includes('application/pdf')))
+    );
 
-    let coverImageUrl: string | undefined;
-    let coverDownloadUrl: string | undefined;
-    let pdfDownloadUrl: string | undefined;
-    let pdfPreviewUrl: string | undefined;
+    const coverItem = items.find((item: any) =>
+      (item.mimeType?.startsWith('image/')) ||
+      (item.name?.toLowerCase().match(/\.(jpg|jpeg|png|webp)$/)) ||
+      (item.name?.toLowerCase().includes('cover')) ||
+      (item.name?.toLowerCase().includes('thumb'))
+    );
 
-    // Extract cover image URLs
-    if (coverObj?.images?.[0]?.url) {
-      coverImageUrl = coverObj.images[0].url;
-      coverDownloadUrl = coverObj.images[0].url;
-      console.log('✅ Cover image URL extracted:', coverImageUrl);
-    } else {
-      console.warn('⚠️ No cover image found in array response');
+    const pdfData = extractFileData(pdfItem || (pdfItem === undefined ? items.find((i: any) => extractFileData(i).url || extractFileData(i).base64) : null));
+    const coverData = extractFileData(coverItem);
+
+    if (pdfData.url || pdfData.base64 || pdfData.blob) {
+      console.log('🎉 Successfully extracted final data from items');
+      onProgress?.(100);
+
+      let pdfBlob = pdfData.blob;
+      if (pdfData.base64 && !pdfBlob) {
+        pdfBlob = base64ToBlob(pdfData.base64, 'application/pdf');
+      }
+
+      return {
+        pdfUrl: pdfData.url,
+        pdfBlob: pdfBlob,
+        coverImageUrl: coverData.url || (coverData.base64 ? `data:image/jpeg;base64,${coverData.base64.replace(/^data:image\/[a-z]+;base64,/, '')}` : undefined),
+        pdfDownloadUrl: pdfData.url,
+        coverDownloadUrl: coverData.url
+      };
     }
-
-    // Extract PDF URLs
-    if (pdfObj?.url) {
-      pdfDownloadUrl = pdfObj.url;
-      pdfPreviewUrl = pdfObj.url;
-      console.log('✅ PDF URL extracted:', pdfDownloadUrl);
-    } else {
-      console.error('❌ No PDF object found in array response');
-      throw new Error('Backend returned array but no PDF file was found');
-    }
-
-    // Log final extracted data
-    console.log('🎉 Successfully extracted both files:', {
-      coverImageUrl,
-      coverDownloadUrl,
-      pdfPreviewUrl,
-      pdfDownloadUrl,
-      hasCover: !!coverImageUrl,
-      hasPDF: !!pdfDownloadUrl
-    });
-
-    onProgress?.(100);
-    return {
-      pdfUrl: pdfPreviewUrl,
-      coverImageUrl,
-      pdfDownloadUrl,
-      coverDownloadUrl
-    };
   }
 
-  // If synchronous response with URLs or Base64 (old format)
-  if (start.pdfBase64 || start.pdfUrl) {
-    onProgress?.(90);
-    let coverImageUrl = start.coverImageUrl;
-    if (start.coverImageBase64) {
-      coverImageUrl = `data:image/jpeg;base64,${start.coverImageBase64.replace(/^data:image\/[a-z]+;base64,/, '')}`;
-    }
+  // 2. Synchronous response with explicit fields (direct or Base64)
+  const pdfUrl = s.pdfUrl || s.pdf_url || s.url || (typeof start === 'string' && (start as string).startsWith('http') ? start : undefined);
+  const pdfBase64 = s.pdfBase64 || s.pdf_base64 || s.pdf_data || s.data || (typeof start === 'string' && (start as string).length > 1000 ? start : undefined);
+  let coverImageUrl = s.coverImageUrl || s.cover_url || s.thumbnailUrl || s.image_url;
 
-    if (start.pdfBase64) {
-      const pdfBlob = base64ToBlob(start.pdfBase64, 'application/pdf');
+  if (s.coverImageBase64 || s.cover_base64 || s.image_data) {
+    const b64 = s.coverImageBase64 || s.cover_base64 || s.image_data;
+    coverImageUrl = `data:image/jpeg;base64,${b64.replace(/^data:image\/[a-z]+;base64,/, '')}`;
+  }
+
+  if (pdfBase64 || pdfUrl) {
+    onProgress?.(90);
+    if (pdfBase64) {
+      const pdfBlob = base64ToBlob(pdfBase64, 'application/pdf');
       onProgress?.(100);
       return { pdfBlob, coverImageUrl };
     }
     onProgress?.(100);
-    return { pdfUrl: start.pdfUrl, coverImageUrl };
+    return { pdfUrl, coverImageUrl };
   }
 
   // Polling logic
@@ -262,3 +259,43 @@ function base64ToBlob(base64: string, mime: string) {
   }
   return new Blob([new Uint8Array(byteNumbers)], { type: mime });
 }
+
+/**
+ * Aggressively extracts a URL or Base64 data from a variety of object shapes
+ */
+function extractFileData(obj: any): { url?: string, base64?: string, blob?: Blob } {
+  if (!obj) return {};
+
+  // If object is already a string
+  if (typeof obj === 'string') {
+    if (obj.startsWith('http')) return { url: obj };
+    if (obj.length > 200 || obj.includes(';base64,')) return { base64: obj };
+    return {};
+  }
+
+  // 1. Check for nested images array (common in some backends)
+  if (obj.images?.[0]?.url) return { url: obj.images[0].url };
+  if (obj.images?.[0]?.data) return { base64: obj.images[0].data };
+
+  // 2. Check for standard URL fields (including Google Drive)
+  const urlFields = ['url', 'webContentLink', 'webViewLink', 'link', 'href', 'downloadUrl', 'previewUrl', 'contentUrl'];
+  for (const field of urlFields) {
+    if (typeof obj[field] === 'string' && obj[field].startsWith('http')) {
+      return { url: obj[field] };
+    }
+  }
+
+  // 3. Check for standard Base64/Data fields
+  const dataFields = ['data', 'base64', 'content', 'pdfBase64', 'fileContent', 'image_data', 'binary'];
+  for (const field of dataFields) {
+    if (typeof obj[field] === 'string' && (obj[field].length > 100 || obj[field].includes(';base64,'))) {
+      return { base64: obj[field] };
+    }
+  }
+
+  // 4. If it's a blob-like helper from our own postJson
+  if (obj.pdfBlob) return { blob: obj.pdfBlob };
+
+  return {};
+}
+

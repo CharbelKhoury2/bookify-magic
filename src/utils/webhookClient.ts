@@ -135,7 +135,6 @@ export async function startGenerationViaWebhook(
   }
 
   // 1. Array-like response (common in n8n/multi-file uploads)
-  // 1. Array-like response (common in n8n/multi-file uploads)
   const s = start as any;
   const items = Array.isArray(start) ? start : (s.files || s.items || (s.result && Array.isArray(s.result) ? s.result : null));
 
@@ -169,11 +168,11 @@ export async function startGenerationViaWebhook(
       }
 
       return {
-        pdfUrl: pdfData.url,
+        pdfUrl: pdfData.previewUrl || pdfData.url,
         pdfBlob: pdfBlob,
-        coverImageUrl: coverData.url || (coverData.base64 ? `data:image/jpeg;base64,${coverData.base64.replace(/^data:image\/[a-z]+;base64,/, '')}` : undefined),
-        pdfDownloadUrl: pdfData.url,
-        coverDownloadUrl: coverData.url
+        coverImageUrl: coverData.previewUrl || coverData.url || (coverData.base64 ? `data:image/jpeg;base64,${coverData.base64.replace(/^data:image\/[a-z]+;base64,/, '')}` : undefined),
+        pdfDownloadUrl: pdfData.downloadUrl || pdfData.url,
+        coverDownloadUrl: coverData.downloadUrl || coverData.url
       };
     }
   }
@@ -263,7 +262,7 @@ function base64ToBlob(base64: string, mime: string) {
 /**
  * Aggressively extracts a URL or Base64 data from a variety of object shapes
  */
-function extractFileData(obj: any): { url?: string, base64?: string, blob?: Blob } {
+function extractFileData(obj: any): { url?: string, previewUrl?: string, downloadUrl?: string, base64?: string, blob?: Blob } {
   if (!obj) return {};
 
   // If object is already a string
@@ -273,11 +272,33 @@ function extractFileData(obj: any): { url?: string, base64?: string, blob?: Blob
     return {};
   }
 
+  // Handle Google Drive objects specifically
+  if (obj.kind === 'drive#file' || obj.webContentLink || obj.webViewLink) {
+    const downloadUrl = obj.webContentLink;
+    let previewUrl = obj.webViewLink;
+
+    // Convert view link to preview link for iframes
+    if (previewUrl && previewUrl.includes('/view')) {
+      previewUrl = previewUrl.replace('/view', '/preview');
+    }
+
+    // Special handling for images to use the thumbnail link for preview
+    if (obj.mimeType?.startsWith('image/')) {
+      previewUrl = `https://drive.google.com/thumbnail?id=${obj.id}&sz=w1000`;
+    }
+
+    return {
+      url: previewUrl || downloadUrl,
+      previewUrl: previewUrl,
+      downloadUrl: downloadUrl
+    };
+  }
+
   // 1. Check for nested images array (common in some backends)
   if (obj.images?.[0]?.url) return { url: obj.images[0].url };
   if (obj.images?.[0]?.data) return { base64: obj.images[0].data };
 
-  // 2. Check for standard URL fields (including Google Drive)
+  // 2. Check for standard URL fields
   const urlFields = ['url', 'webContentLink', 'webViewLink', 'link', 'href', 'downloadUrl', 'previewUrl', 'contentUrl'];
   for (const field of urlFields) {
     if (typeof obj[field] === 'string' && obj[field].startsWith('http')) {
@@ -298,4 +319,5 @@ function extractFileData(obj: any): { url?: string, base64?: string, blob?: Blob
 
   return {};
 }
+
 

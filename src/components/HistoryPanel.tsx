@@ -1,10 +1,12 @@
 import React from 'react';
-import { Clock, Download, Trash2, Image } from 'lucide-react';
+import { Clock, Download, Trash2, Image, Maximize2 } from 'lucide-react';
 import { useHistoryStore } from '../store/historyStore';
 import { formatDistanceToNow } from 'date-fns';
+import { ImageModal } from './ImageModal';
 
 export const HistoryPanel: React.FC = () => {
   const { history, removeFromHistory, clearHistory } = useHistoryStore();
+  const [selectedImage, setSelectedImage] = React.useState<{ url: string; title: string } | null>(null);
 
   if (history.length === 0) {
     return (
@@ -45,9 +47,17 @@ export const HistoryPanel: React.FC = () => {
             key={item.id}
             item={item}
             onRemove={() => removeFromHistory(item.id)}
+            onViewImage={(url, title) => setSelectedImage({ url, title })}
           />
         ))}
       </div>
+
+      <ImageModal
+        isOpen={!!selectedImage}
+        onClose={() => setSelectedImage(null)}
+        imageUrl={selectedImage?.url || ''}
+        title={selectedImage?.title}
+      />
     </div>
   );
 };
@@ -65,9 +75,10 @@ interface HistoryCardProps {
     coverDownloadUrl?: string;
   };
   onRemove: () => void;
+  onViewImage: (url: string, title: string) => void;
 }
 
-const HistoryCard: React.FC<HistoryCardProps> = ({ item, onRemove }) => {
+const HistoryCard: React.FC<HistoryCardProps> = ({ item, onRemove, onViewImage }) => {
   const timeAgo = formatDistanceToNow(item.timestamp, { addSuffix: true });
 
   const handleDownloadPDF = () => {
@@ -89,11 +100,19 @@ const HistoryCard: React.FC<HistoryCardProps> = ({ item, onRemove }) => {
   return (
     <div className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors group">
       {item.thumbnailUrl ? (
-        <img
-          src={item.thumbnailUrl}
-          alt=""
-          className="w-12 h-12 rounded-lg object-cover"
-        />
+        <div
+          className="relative cursor-zoom-in group/img"
+          onClick={() => onViewImage(item.thumbnailUrl, `${item.childName}'s ${item.themeName}`)}
+        >
+          <img
+            src={item.thumbnailUrl}
+            alt=""
+            className="w-12 h-12 rounded-lg object-cover ring-2 ring-transparent group-hover/img:ring-primary/50 transition-all shadow-sm"
+          />
+          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+            <Maximize2 className="w-4 h-4 text-white" />
+          </div>
+        </div>
       ) : (
         <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-xl">
           {item.themeEmoji}

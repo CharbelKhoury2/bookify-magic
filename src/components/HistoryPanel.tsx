@@ -1,12 +1,22 @@
 import React from 'react';
-import { Clock, Download, Trash2, Image, Maximize2 } from 'lucide-react';
+import { Clock, Download, Trash2, Image, Maximize2, ExternalLink } from 'lucide-react';
 import { useHistoryStore } from '../store/historyStore';
+import { useBookStore } from '../store/bookStore';
 import { formatDistanceToNow } from 'date-fns';
 import { ImageModal } from './ImageModal';
+import { HistoryItem } from '../utils/types';
 
 export const HistoryPanel: React.FC = () => {
   const { history, removeFromHistory, clearHistory } = useHistoryStore();
+  const { loadBook } = useBookStore();
   const [selectedImage, setSelectedImage] = React.useState<{ url: string; title: string } | null>(null);
+
+  const handleCardClick = (item: HistoryItem) => {
+    loadBook(item);
+    // Smooth scroll to the top of the generator/preview area
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    console.log('📖 Loading book from history:', item.childName);
+  };
 
   if (history.length === 0) {
     return (
@@ -48,6 +58,7 @@ export const HistoryPanel: React.FC = () => {
             item={item}
             onRemove={() => removeFromHistory(item.id)}
             onViewImage={(url, title) => setSelectedImage({ url, title })}
+            onClick={() => handleCardClick(item)}
           />
         ))}
       </div>
@@ -63,22 +74,13 @@ export const HistoryPanel: React.FC = () => {
 };
 
 interface HistoryCardProps {
-  item: {
-    id: string;
-    childName: string;
-    themeName: string;
-    themeEmoji: string;
-    timestamp: number;
-    pdfUrl: string;
-    thumbnailUrl: string;
-    pdfDownloadUrl?: string;
-    coverDownloadUrl?: string;
-  };
+  item: HistoryItem;
   onRemove: () => void;
   onViewImage: (url: string, title: string) => void;
+  onClick: () => void;
 }
 
-const HistoryCard: React.FC<HistoryCardProps> = ({ item, onRemove, onViewImage }) => {
+const HistoryCard: React.FC<HistoryCardProps> = ({ item, onRemove, onViewImage, onClick }) => {
   const timeAgo = formatDistanceToNow(item.timestamp, { addSuffix: true });
 
   const handleDownloadPDF = () => {
@@ -98,11 +100,17 @@ const HistoryCard: React.FC<HistoryCardProps> = ({ item, onRemove, onViewImage }
   };
 
   return (
-    <div className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors group">
+    <div
+      className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50 hover:bg-secondary cursor-pointer transition-all group relative border-2 border-transparent hover:border-primary/20 hover:shadow-md"
+      onClick={onClick}
+    >
       {item.thumbnailUrl ? (
         <div
           className="relative cursor-zoom-in group/img"
-          onClick={() => onViewImage(item.thumbnailUrl, `${item.childName}'s ${item.themeName}`)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onViewImage(item.thumbnailUrl, `${item.childName}'s ${item.themeName}`);
+          }}
         >
           <img
             src={item.thumbnailUrl}
@@ -120,13 +128,24 @@ const HistoryCard: React.FC<HistoryCardProps> = ({ item, onRemove, onViewImage }
       )}
 
       <div className="flex-1 min-w-0">
-        <h4 className="font-semibold text-foreground text-sm truncate">
+        <h4 className="font-semibold text-foreground text-sm truncate group-hover:text-primary transition-colors">
           {item.childName}'s {item.themeName}
         </h4>
         <p className="text-xs text-muted-foreground">{timeAgo}</p>
       </div>
 
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-1 opacity-100 transition-opacity">
+        {/* Load/View Button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick();
+          }}
+          className="p-2 hover:bg-primary/10 rounded-lg transition-colors hidden group-hover:block"
+          title="Re-view Content"
+        >
+          <ExternalLink className="w-4 h-4 text-primary" />
+        </button>
         {/* Download PDF Button */}
         {(item.pdfUrl || item.pdfDownloadUrl) && (
           <button

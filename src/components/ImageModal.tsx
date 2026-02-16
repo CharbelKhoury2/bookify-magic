@@ -12,15 +12,15 @@ interface ImageModalProps {
 export const ImageModal: React.FC<ImageModalProps> = ({ isOpen, onClose, imageUrl, title }) => {
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 overflow-hidden bg-transparent border-none shadow-none sm:rounded-3xl flex flex-col items-center justify-center">
+            <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-transparent border-none shadow-none sm:rounded-3xl flex flex-col items-center justify-center focus:outline-none">
                 <DialogTitle className="sr-only">
                     {title || 'Image Preview'}
                 </DialogTitle>
-                <div className="relative group">
-                    {/* Close button - more prominent for image viewer */}
+                <div className="relative group p-4">
+                    {/* Close button - more prominent and fixed positioning */}
                     <button
                         onClick={onClose}
-                        className="absolute -top-4 -right-4 z-50 p-2 rounded-full bg-white/90 text-primary shadow-lg hover:bg-white hover:scale-110 transition-all duration-300"
+                        className="absolute top-1 right-1 z-[60] p-2.5 rounded-full bg-white text-primary shadow-2xl hover:bg-white hover:scale-110 active:scale-95 transition-all duration-300 border-2 border-primary/20"
                         aria-label="Close"
                     >
                         <X className="w-6 h-6" />

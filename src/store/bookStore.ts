@@ -24,6 +24,7 @@ interface BookStore {
   setPdfDownloadUrl: (url: string | null) => void;
   setPdfDownloadBlob: (blob: Blob | null) => void;
   setCoverDownloadUrl: (url: string | null) => void;
+  loadBook: (data: any) => void;
   reset: () => void;
 }
 
@@ -50,6 +51,16 @@ export const useBookStore = create<BookStore>((set) => ({
   setPdfDownloadUrl: (url) => set({ pdfDownloadUrl: url }),
   setPdfDownloadBlob: (blob) => set({ pdfDownloadBlob: blob }),
   setCoverDownloadUrl: (url) => set({ coverDownloadUrl: url }),
+  loadBook: (data) => set({
+    childName: data.childName,
+    selectedTheme: { id: '', name: data.themeName, emoji: data.themeEmoji, description: '', colors: { primary: '', secondary: '', accent: '', background: '' } },
+    generatedPDF: data.pdfUrl,
+    coverImage: data.thumbnailUrl,
+    pdfDownloadUrl: data.pdfDownloadUrl || null,
+    coverDownloadUrl: data.coverDownloadUrl || null,
+    isGenerating: false,
+    generationProgress: 100
+  }),
   reset: () => set({
     childName: '',
     selectedTheme: null,

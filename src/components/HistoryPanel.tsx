@@ -3,19 +3,19 @@ import { Clock, Download, Trash2, Image, Maximize2, ExternalLink } from 'lucide-
 import { useHistoryStore } from '../store/historyStore';
 import { useBookStore } from '../store/bookStore';
 import { formatDistanceToNow } from 'date-fns';
-import { ImageModal } from './ImageModal';
 import { HistoryItem } from '../utils/types';
+import { BookViewerModal } from './BookViewerModal';
 
 export const HistoryPanel: React.FC = () => {
   const { history, removeFromHistory, clearHistory } = useHistoryStore();
   const { loadBook } = useBookStore();
-  const [selectedImage, setSelectedImage] = React.useState<{ url: string; title: string } | null>(null);
+  const [viewingBook, setViewingBook] = React.useState<HistoryItem | null>(null);
 
   const handleCardClick = (item: HistoryItem) => {
+    setViewingBook(item);
+    // Also load it into store for quick access if they close modal
     loadBook(item);
-    // Smooth scroll to the top of the generator/preview area
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    console.log('📖 Loading book from history:', item.childName);
+    console.log('📖 Viewing book from history:', item.childName);
   };
 
   if (history.length === 0) {
@@ -57,17 +57,15 @@ export const HistoryPanel: React.FC = () => {
             key={item.id}
             item={item}
             onRemove={() => removeFromHistory(item.id)}
-            onViewImage={(url, title) => setSelectedImage({ url, title })}
             onClick={() => handleCardClick(item)}
           />
         ))}
       </div>
 
-      <ImageModal
-        isOpen={!!selectedImage}
-        onClose={() => setSelectedImage(null)}
-        imageUrl={selectedImage?.url || ''}
-        title={selectedImage?.title}
+      <BookViewerModal
+        isOpen={!!viewingBook}
+        onClose={() => setViewingBook(null)}
+        book={viewingBook}
       />
     </div>
   );
@@ -76,11 +74,10 @@ export const HistoryPanel: React.FC = () => {
 interface HistoryCardProps {
   item: HistoryItem;
   onRemove: () => void;
-  onViewImage: (url: string, title: string) => void;
   onClick: () => void;
 }
 
-const HistoryCard: React.FC<HistoryCardProps> = ({ item, onRemove, onViewImage, onClick }) => {
+const HistoryCard: React.FC<HistoryCardProps> = ({ item, onRemove, onClick }) => {
   const timeAgo = formatDistanceToNow(item.timestamp, { addSuffix: true });
 
   const handleDownloadPDF = () => {
@@ -105,21 +102,12 @@ const HistoryCard: React.FC<HistoryCardProps> = ({ item, onRemove, onViewImage, 
       onClick={onClick}
     >
       {item.thumbnailUrl ? (
-        <div
-          className="relative cursor-zoom-in group/img"
-          onClick={(e) => {
-            e.stopPropagation();
-            onViewImage(item.thumbnailUrl, `${item.childName}'s ${item.themeName}`);
-          }}
-        >
+        <div className="relative group/img">
           <img
             src={item.thumbnailUrl}
             alt=""
             className="w-12 h-12 rounded-lg object-cover ring-2 ring-transparent group-hover/img:ring-primary/50 transition-all shadow-sm"
           />
-          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-            <Maximize2 className="w-4 h-4 text-white" />
-          </div>
         </div>
       ) : (
         <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-xl">

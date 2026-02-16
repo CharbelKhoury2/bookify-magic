@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Theme, ProcessedPhoto } from '../utils/types';
+import { Theme, ProcessedPhoto, HistoryItem } from '../utils/types';
 
 interface BookStore {
   childName: string;
@@ -24,7 +24,7 @@ interface BookStore {
   setPdfDownloadUrl: (url: string | null) => void;
   setPdfDownloadBlob: (blob: Blob | null) => void;
   setCoverDownloadUrl: (url: string | null) => void;
-  loadBook: (data: any) => void;
+  loadBook: (data: HistoryItem) => void;
   reset: () => void;
 }
 

@@ -14,7 +14,7 @@ export const BookViewerModal: React.FC<BookViewerModalProps> = ({ isOpen, onClos
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 bg-background/95 backdrop-blur-xl border border-white/20 shadow-2xl sm:rounded-3xl flex flex-col overflow-hidden focus:outline-none">
+            <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 bg-background/95 backdrop-blur-xl border border-white/20 shadow-2xl sm:rounded-3xl flex flex-col overflow-hidden focus:outline-none [&>button]:hidden">
 
                 {/* Header Area */}
                 <div className="flex items-center justify-between p-4 sm:p-6 border-b border-white/10 bg-white/5 relative z-10">

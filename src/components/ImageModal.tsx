@@ -12,7 +12,7 @@ interface ImageModalProps {
 export const ImageModal: React.FC<ImageModalProps> = ({ isOpen, onClose, imageUrl, title }) => {
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-transparent border-none shadow-none sm:rounded-3xl flex flex-col items-center justify-center focus:outline-none">
+            <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-transparent border-none shadow-none sm:rounded-3xl flex flex-col items-center justify-center focus:outline-none [&>button]:hidden">
                 <DialogTitle className="sr-only">
                     {title || 'Image Preview'}
                 </DialogTitle>

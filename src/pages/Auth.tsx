@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { BookOpen, Mail, Lock, User, ArrowLeft } from 'lucide-react';
+import { BookOpen, Mail, Lock, User, Sparkles, Star } from 'lucide-react';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -49,54 +49,66 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen gradient-dreamy flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        {/* Back to Home */}
-        <button
-          onClick={() => navigate('/')}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Home
-        </button>
+    <div className="min-h-screen gradient-dreamy flex items-center justify-center px-4 py-12 relative overflow-hidden">
+      {/* Decorative Background Elements */}
+      <div className="absolute top-20 left-10 text-primary/20 animate-float-slow">
+        <Sparkles className="w-12 h-12" />
+      </div>
+      <div className="absolute bottom-20 right-10 text-accent/20 animate-float">
+        <Star className="w-16 h-16" />
+      </div>
+      <div className="absolute top-1/4 right-20 text-secondary/20 animate-pulse">
+        <Star className="w-8 h-8" />
+      </div>
+      <div className="premium-blur top-1/4 -left-20 opacity-20" />
+      <div className="premium-blurBottom bottom-1/4 -right-20 opacity-20" />
 
-        {/* Card */}
-        <div className="card-magical animate-fade-in">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full gradient-magic shadow-glow mb-4">
-              <BookOpen className="w-8 h-8 text-primary-foreground" />
-            </div>
-            <h1 className="text-2xl font-bold text-foreground">
+      <div className="w-full max-w-md relative z-10">
+        {/* Logo Branding */}
+        <div className="text-center mb-8 animate-fade-in">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full gradient-magic shadow-glow mb-6 animate-float">
+            <BookOpen className="w-10 h-10 text-primary-foreground" />
+          </div>
+          <h1 className="text-4xl font-display font-bold text-gradient-magic">
+            Bookify Magic
+          </h1>
+          <p className="text-muted-foreground mt-3 font-medium">
+            Where your stories come to life ✨
+          </p>
+        </div>
+
+        {/* Auth Card */}
+        <div className="card-magical backdrop-blur-xl bg-white/40 border-white/30 shadow-2xl p-8 sm:p-10 rounded-3xl animate-scale-in">
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-foreground">
               {isLogin ? 'Welcome Back!' : 'Create Account'}
-            </h1>
-            <p className="text-muted-foreground mt-2">
+            </h2>
+            <p className="text-muted-foreground text-sm mt-1">
               {isLogin
-                ? 'Sign in to access your magical books'
-                : 'Join us to create personalized stories'}
+                ? 'Sign in to access your magical library'
+                : 'Join us to start creating your child\'s adventure'}
             </p>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground flex items-center gap-2">
-                <Mail className="w-4 h-4 text-primary" />
-                Email
+              <label className="text-sm font-semibold text-foreground/80 flex items-center gap-2 ml-1">
+                <Mail className="w-4 h-4 text-primary/70" />
+                Email Address
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@email.com"
+                placeholder="magic@story.com"
                 required
-                className="w-full px-4 py-3 rounded-xl border-2 border-border bg-card text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                className="w-full px-5 py-3.5 rounded-2xl border-2 border-border/50 bg-white/50 text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 transition-all duration-300"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground flex items-center gap-2">
-                <Lock className="w-4 h-4 text-primary" />
+              <label className="text-sm font-semibold text-foreground/80 flex items-center gap-2 ml-1">
+                <Lock className="w-4 h-4 text-primary/70" />
                 Password
               </label>
               <input
@@ -106,19 +118,19 @@ export default function Auth() {
                 placeholder="••••••••"
                 required
                 minLength={6}
-                className="w-full px-4 py-3 rounded-xl border-2 border-border bg-card text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                className="w-full px-5 py-3.5 rounded-2xl border-2 border-border/50 bg-white/50 text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 transition-all duration-300"
               />
             </div>
 
-            {/* Message */}
+            {/* Error/Success Messages */}
             {message && (
               <div
-                className={`p-3 rounded-xl text-sm ${
-                  message.type === 'success'
+                className={`p-4 rounded-2xl text-sm flex items-center gap-3 animate-shake ${message.type === 'success'
                     ? 'bg-success/10 text-success border border-success/30'
                     : 'bg-destructive/10 text-destructive border border-destructive/30'
-                }`}
+                  }`}
               >
+                <div className={`w-2 h-2 rounded-full ${message.type === 'success' ? 'bg-success' : 'bg-destructive'}`} />
                 {message.text}
               </div>
             )}
@@ -126,35 +138,40 @@ export default function Auth() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full btn-magic flex items-center justify-center gap-2"
+              className="w-full btn-magic py-4 rounded-2xl flex items-center justify-center gap-3 shadow-lg hover:shadow-primary/30 transition-all duration-300 active:scale-[0.98]"
             >
               {loading ? (
-                <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
                   <User className="w-5 h-5" />
-                  {isLogin ? 'Sign In' : 'Create Account'}
+                  <span className="font-bold">{isLogin ? 'Enter Magical Library' : 'Create My Account'}</span>
                 </>
               )}
             </button>
           </form>
 
-          {/* Toggle */}
-          <div className="mt-6 text-center">
-            <p className="text-muted-foreground">
-              {isLogin ? "Don't have an account?" : 'Already have an account?'}
+          {/* Toggle Login/Signup */}
+          <div className="mt-8 text-center">
+            <p className="text-muted-foreground text-sm font-medium">
+              {isLogin ? "New to the magic?" : 'Already have an account?'}
               <button
                 onClick={() => {
                   setIsLogin(!isLogin);
                   setMessage(null);
                 }}
-                className="ml-2 text-primary font-semibold hover:underline"
+                className="ml-2 text-primary font-bold hover:text-primary/80 transition-colors underline-offset-4 hover:underline"
               >
                 {isLogin ? 'Sign Up' : 'Sign In'}
               </button>
             </p>
           </div>
         </div>
+
+        {/* Footer info */}
+        <p className="text-center mt-10 text-xs text-muted-foreground opacity-60">
+          Securely powered by Supabase Auth &copy; 2024 Bookify Magic
+        </p>
       </div>
     </div>
   );

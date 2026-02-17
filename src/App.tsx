@@ -15,30 +15,19 @@ function HomePage() {
         {/* Header */}
         <header className="text-center mb-10 sm:mb-12 animate-fade-in">
           <div className="flex justify-end mb-4">
-            {loading ? (
-              <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-            ) : user ? (
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-muted-foreground hidden sm:block">
-                  {user.email}
-                </span>
-                <button
-                  onClick={signOut}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-border text-muted-foreground hover:border-destructive hover:text-destructive transition-colors"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span className="hidden sm:inline">Sign Out</span>
-                </button>
-              </div>
-            ) : (
-              <Link
-                to="/auth"
-                className="flex items-center gap-2 px-4 py-2 rounded-xl gradient-magic text-primary-foreground font-semibold hover:scale-105 transition-transform"
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground hidden sm:block">
+                {user?.email}
+              </span>
+              <button
+                onClick={signOut}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-border text-muted-foreground hover:border-destructive hover:text-destructive transition-colors group"
+                title="Sign Out"
               >
-                <User className="w-4 h-4" />
-                Sign In
-              </Link>
-            )}
+                <LogOut className="w-4 h-4 transition-transform group-hover:scale-110" />
+                <span className="hidden sm:inline font-medium">Sign Out</span>
+              </button>
+            </div>
           </div>
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full gradient-magic shadow-glow mb-6 animate-float">
             <BookOpen className="w-10 h-10 text-primary-foreground" />
@@ -73,11 +62,25 @@ function HomePage() {
 }
 
 function App() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen gradient-dreamy flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+          <p className="text-primary font-medium animate-pulse">Entering the magical world...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/auth" element={<Auth />} />
+        <Route path="/" element={user ? <HomePage /> : <Auth />} />
+        <Route path="/auth" element={user ? <HomePage /> : <Auth />} />
+        <Route path="*" element={<Link to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

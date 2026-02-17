@@ -5,6 +5,17 @@ import { useBookStore } from '../store/bookStore';
 import { formatDistanceToNow } from 'date-fns';
 import { HistoryItem } from '../utils/types';
 import { BookViewerModal } from './BookViewerModal';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
+import { useToast } from '../hooks/use-toast';
 
 export const HistoryPanel: React.FC = () => {
   const {
@@ -17,8 +28,27 @@ export const HistoryPanel: React.FC = () => {
     clearDeletedHistory
   } = useHistoryStore();
   const { loadBook } = useBookStore();
+  const { toast } = useToast();
   const [viewingBook, setViewingBook] = React.useState<HistoryItem | null>(null);
   const [view, setView] = React.useState<'active' | 'trash'>('active');
+  const [confirmConfig, setConfirmConfig] = React.useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void;
+    actionLabel: string;
+    isDestructive?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    description: '',
+    onConfirm: () => { },
+    actionLabel: 'Confirm',
+  });
+
+  const confirm = (config: Omit<typeof confirmConfig, 'isOpen'>) => {
+    setConfirmConfig({ ...config, isOpen: true });
+  };
 
   const handleCardClick = (item: HistoryItem) => {
     setViewingBook(item);
@@ -70,7 +100,18 @@ export const HistoryPanel: React.FC = () => {
         {view === 'active' ? (
           history.length > 0 && (
             <button
-              onClick={clearHistory}
+              onClick={() => confirm({
+                title: "Clear all active books?",
+                description: "This will move all your current books to the trash. You can still restore them later.",
+                actionLabel: "Clear all",
+                onConfirm: () => {
+                  clearHistory();
+                  toast({
+                    title: "History Cleared",
+                    description: "All books have been moved to the trash.",
+                  });
+                },
+              })}
               className="text-xs text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded hover:bg-destructive/5"
             >
               Clear active
@@ -79,7 +120,20 @@ export const HistoryPanel: React.FC = () => {
         ) : (
           deletedHistory.length > 0 && (
             <button
-              onClick={clearDeletedHistory}
+              onClick={() => confirm({
+                title: "Empty Trash?",
+                description: "This will permanently delete all books in your trash. This action cannot be undone.",
+                actionLabel: "Empty Trash",
+                isDestructive: true,
+                onConfirm: () => {
+                  clearDeletedHistory();
+                  toast({
+                    title: "Trash Emptied",
+                    description: "All deleted books have been permanently removed.",
+                    variant: "destructive",
+                  });
+                },
+              })}
               className="text-xs text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded hover:bg-destructive/5"
             >
               Empty trash
@@ -101,7 +155,13 @@ export const HistoryPanel: React.FC = () => {
               <HistoryCard
                 key={item.id}
                 item={item}
-                onRemove={() => removeFromHistory(item.id)}
+                onRemove={() => {
+                  removeFromHistory(item.id);
+                  toast({
+                    title: "Moved to Trash",
+                    description: `"${item.childName}'s Adventure" can be restored from the Trash tab.`,
+                  });
+                }}
                 onClick={() => handleCardClick(item)}
               />
             ))
@@ -119,8 +179,27 @@ export const HistoryPanel: React.FC = () => {
                 key={item.id}
                 item={item}
                 isTrash
-                onRemove={() => permanentlyDeleteFromHistory(item.id)}
-                onRestore={() => restoreFromHistory(item.id)}
+                onRemove={() => confirm({
+                  title: "Permanently delete this book?",
+                  description: `Are you sure you want to delete "${item.childName}'s Adventure"? This action cannot be undone.`,
+                  actionLabel: "Delete Forever",
+                  isDestructive: true,
+                  onConfirm: () => {
+                    permanentlyDeleteFromHistory(item.id);
+                    toast({
+                      title: "Book Deleted",
+                      description: "The book has been permanently removed.",
+                      variant: "destructive",
+                    });
+                  },
+                })}
+                onRestore={() => {
+                  restoreFromHistory(item.id);
+                  toast({
+                    title: "Book Restored",
+                    description: "The book is back in your library.",
+                  });
+                }}
                 onClick={() => { }} // No click in trash
               />
             ))
@@ -133,6 +212,30 @@ export const HistoryPanel: React.FC = () => {
         onClose={() => setViewingBook(null)}
         book={viewingBook}
       />
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={confirmConfig.isOpen} onOpenChange={(open) => setConfirmConfig(prev => ({ ...prev, isOpen: open }))}>
+        <AlertDialogContent className="max-w-[400px] bg-background/95 backdrop-blur-xl border-white/20 shadow-2xl rounded-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-bold">{confirmConfig.title}</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              {confirmConfig.description}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl border-white/10 hover:bg-white/5">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmConfig.onConfirm}
+              className={`rounded-xl px-6 ${confirmConfig.isDestructive
+                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                : "bg-primary text-primary-foreground hover:bg-primary/90"
+                }`}
+            >
+              {confirmConfig.actionLabel}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

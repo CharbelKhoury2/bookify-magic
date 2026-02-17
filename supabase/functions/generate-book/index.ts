@@ -6,6 +6,18 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const ALLOWED_THEME_IDS = [
+  "cosmic_journey",
+  "zoo_explorer",
+  "dragon_quest",
+  "princess_story",
+  "champion_spirit",
+  "tooth_fairy",
+];
+
+const NAME_REGEX = /^[a-zA-Z\s\-']+$/;
+const ALLOWED_MIMES = ["image/jpeg", "image/jpg", "image/png"];
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -45,13 +57,61 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Forward the request body to n8n
+    // Parse and validate body
     const body = await req.json();
+
+    const { childName, themeId, themeName, photoBase64, photoMime } = body;
+
+    // Validate childName
+    if (
+      typeof childName !== "string" ||
+      childName.trim().length < 2 ||
+      childName.trim().length > 30 ||
+      !NAME_REGEX.test(childName.trim())
+    ) {
+      return new Response(
+        JSON.stringify({ error: "Invalid child name. Must be 2-30 letters, spaces, hyphens or apostrophes." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate themeId
+    if (typeof themeId !== "string" || !ALLOWED_THEME_IDS.includes(themeId)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid theme selected." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate photoMime
+    if (typeof photoMime !== "string" || !ALLOWED_MIMES.includes(photoMime)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid photo format. Use JPEG or PNG." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate photoBase64 exists and isn't too large (~7.5MB base64 ≈ 5MB file)
+    if (typeof photoBase64 !== "string" || photoBase64.length < 100 || photoBase64.length > 10 * 1024 * 1024) {
+      return new Response(
+        JSON.stringify({ error: "Invalid or too large photo. Max 5MB." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Forward validated data to n8n
+    const validatedBody = {
+      childName: childName.trim(),
+      themeId,
+      themeName: typeof themeName === "string" ? themeName.slice(0, 50) : "",
+      photoBase64,
+      photoMime,
+    };
 
     const n8nRes = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(validatedBody),
     });
 
     if (!n8nRes.ok) {

@@ -1,5 +1,6 @@
 import { Theme } from './types';
 import { imageToBase64 } from './imageProcessor';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface GenerationStartResponse {
   status?: string;
@@ -23,77 +24,6 @@ export interface GenerationStatusResponse {
   message?: string;
 }
 
-async function postJson(url: string, body: any): Promise<any> {
-  console.log('🚀 Sending book request to Webhook:', url);
-  console.log('📦 Data being sent:', {
-    ...body,
-    photoBase64: body.photoBase64?.substring(0, 50) + '...'
-  });
-
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json, application/pdf'
-      },
-      body: JSON.stringify(body),
-    });
-
-    const contentType = res.headers.get('content-type');
-    console.log('📥 Received Response Status:', res.status, '(' + contentType + ')');
-
-    if (res.ok && contentType?.includes('application/pdf')) {
-      const blob = await res.blob();
-      return { pdfBlob: blob, status: 'completed' };
-    }
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      console.error('❌ Webhook error response:', text);
-      throw new Error(`Server returned error ${res.status}: ${text.slice(0, 100)}`);
-    }
-
-    const text = await res.text();
-    console.log('📄 Raw response text (first 500 chars):', text.substring(0, 500));
-    try {
-      const parsed = JSON.parse(text);
-      console.log('✅ Parsed JSON response:', parsed);
-      return parsed;
-    } catch {
-      console.log('ℹ️ Webhook returned raw text, checking if it is a URL or Base64');
-      // If it's a URL or base64, return it in a format the caller can use
-      if (text.trim().startsWith('http')) return { pdfUrl: text.trim() };
-      if (text.length > 500) return { pdfBase64: text.trim() };
-
-      throw new Error(`Webhook returned unparseable text: "${text.slice(0, 100)}..."`);
-    }
-  } catch (err: any) {
-    console.error('🚨 Connection Error:', err);
-    if (err?.name === 'TypeError') {
-      throw new Error('Network/CORS error. Please ensure n8n allows requests from this domain or use the Supabase proxy.');
-    }
-    throw err;
-  }
-}
-
-async function getJson(url: string, method: 'GET' | 'POST' = 'GET', body?: any) {
-  try {
-    const res = await fetch(url, {
-      method,
-      headers: method === 'POST' ? { 'Content-Type': 'application/json' } : undefined,
-      body: method === 'POST' && body !== undefined ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`Status error ${res.status}: ${text.slice(0, 100)}`);
-    }
-    return await res.json();
-  } catch (err: any) {
-    throw err;
-  }
-}
-
 export async function startGenerationViaWebhook(
   childName: string,
   theme: Theme,
@@ -106,14 +36,6 @@ export async function startGenerationViaWebhook(
   pdfDownloadUrl?: string;
   coverDownloadUrl?: string;
 }> {
-  const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL as string | undefined;
-  const statusUrlBase = import.meta.env.VITE_N8N_STATUS_URL as string | undefined;
-  const statusMethod = ((import.meta.env.VITE_N8N_STATUS_METHOD as string | undefined) || 'GET').toUpperCase() as 'GET' | 'POST';
-
-  if (!webhookUrl) {
-    throw new Error('Missing VITE_N8N_WEBHOOK_URL in .env file');
-  }
-
   onProgress?.(5);
   const photoBase64 = await imageToBase64(photoFile);
   onProgress?.(10);
@@ -126,7 +48,18 @@ export async function startGenerationViaWebhook(
     photoMime: photoFile.type || 'image/jpeg',
   };
 
-  const start: GenerationStartResponse = await postJson(webhookUrl, payload);
+  console.log('🚀 Sending book request via edge function');
+
+  const { data, error } = await supabase.functions.invoke('generate-book', {
+    body: payload,
+  });
+
+  if (error) {
+    console.error('❌ Edge function error:', error);
+    throw new Error(error.message || 'Book generation service error');
+  }
+
+  const start: GenerationStartResponse = data;
 
   // If direct PDF binary response
   if (start.pdfBlob) {
@@ -198,55 +131,8 @@ export async function startGenerationViaWebhook(
     return { pdfUrl, coverImageUrl };
   }
 
-  // Polling logic
-  const jobId = start.jobId;
-  const statusUrl = start.statusUrl || (statusUrlBase && jobId ? `${statusUrlBase.replace(/\/$/, '')}/${jobId}` : undefined);
-
-  if (!statusUrl) {
-    throw new Error('Generation started, but no status URL provided by n8n.');
-  }
-
-  let progressShown = 15;
-  const startTime = Date.now();
-  const maxWaitMs = 5 * 60 * 1000;
-
-  while (Date.now() - startTime < maxWaitMs) {
-    const status: GenerationStatusResponse = await getJson(
-      statusUrl,
-      statusMethod,
-      statusMethod === 'POST' ? { jobId } : undefined
-    );
-
-    if (status.progress !== undefined) {
-      onProgress?.(Math.min(99, Math.max(progressShown, status.progress)));
-    } else {
-      progressShown = Math.min(95, progressShown + 3);
-      onProgress?.(progressShown);
-    }
-
-    if (status.status === 'completed') {
-      let coverImageUrl = status.coverImageUrl;
-      if (status.coverImageBase64) {
-        coverImageUrl = `data:image/jpeg;base64,${status.coverImageBase64.replace(/^data:image\/[a-z]+;base64,/, '')}`;
-      }
-
-      if (status.pdfBase64) {
-        const pdfBlob = base64ToBlob(status.pdfBase64, 'application/pdf');
-        onProgress?.(100);
-        return { pdfBlob, coverImageUrl };
-      }
-      onProgress?.(100);
-      return { pdfUrl: status.pdfUrl, coverImageUrl };
-    }
-
-    if (status.status === 'failed') {
-      throw new Error(status.message || 'Generation failed in n8n');
-    }
-
-    await new Promise(r => setTimeout(r, 2000));
-  }
-
-  throw new Error('Generation timed out after 5 minutes');
+  // Polling not supported via edge function proxy - if no immediate result, error
+  throw new Error('No PDF was returned from the book generation service.');
 }
 
 function base64ToBlob(base64: string, mime: string) {

@@ -5,6 +5,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { useAuth } from './hooks/useAuth';
 import { BookOpen, User, LogOut } from 'lucide-react';
 import Auth from './pages/Auth';
+import { Analytics } from '@vercel/analytics/react';
 
 function HomePage() {
   const { user, loading, signOut } = useAuth();
@@ -76,13 +77,16 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={user ? <HomePage /> : <Auth />} />
-        <Route path="/auth" element={user ? <HomePage /> : <Auth />} />
-        <Route path="*" element={<Link to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={user ? <HomePage /> : <Auth />} />
+          <Route path="/auth" element={user ? <HomePage /> : <Auth />} />
+          <Route path="*" element={<Link to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+      <Analytics />
+    </>
   );
 }
 

@@ -117,6 +117,12 @@
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Dark mode gradients */
+    --gradient-magic: linear-gradient(135deg, hsl(270 60% 65%), hsl(330 70% 75%));
+    --gradient-sunset: linear-gradient(135deg, hsl(330 40% 35%), hsl(200 60% 45%));
+    --gradient-dreamy: linear-gradient(135deg, hsl(270 30% 10%), hsl(330 30% 12%), hsl(200 30% 12%));
+    --gradient-card: linear-gradient(145deg, hsl(270 25% 15%), hsl(270 30% 10%));
   }
 }
 
@@ -183,16 +189,16 @@
   }
 
   .glass-card {
-    background: rgba(255, 255, 255, 0.7);
+    background: hsl(var(--card) / 0.7);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid hsl(var(--border) / 0.3);
     box-shadow: var(--shadow-glass);
   }
 
   .book-frame {
     position: relative;
-    border: 12px solid #fff;
+    border: 12px solid hsl(var(--card));
     border-radius: 1.5rem;
     box-shadow:
       0 10px 30px -10px rgba(0, 0, 0, 0.3),

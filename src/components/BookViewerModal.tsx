@@ -14,13 +14,13 @@ export const BookViewerModal: React.FC<BookViewerModalProps> = ({ isOpen, onClos
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 bg-background/95 backdrop-blur-xl border border-white/20 shadow-2xl sm:rounded-3xl flex flex-col overflow-hidden focus:outline-none [&>button]:hidden">
+            <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 bg-background/95 backdrop-blur-xl border border-border/20 shadow-2xl sm:rounded-3xl flex flex-col overflow-hidden focus:outline-none [&>button]:hidden">
 
                 {/* Header Area */}
-                <div className="flex items-center justify-between p-4 sm:p-6 border-b border-white/10 bg-white/5 relative z-10">
+                <div className="flex items-center justify-between p-4 sm:p-6 border-b border-border/10 bg-foreground/5 relative z-10">
                     <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-xl gradient-magic flex items-center justify-center shadow-glow">
-                            <FileText className="w-5 h-5 text-white" />
+                            <FileText className="w-5 h-5 text-primary-foreground" />
                         </div>
                         <div>
                             <DialogTitle className="text-xl font-display font-bold text-foreground leading-tight">
@@ -42,7 +42,7 @@ export const BookViewerModal: React.FC<BookViewerModalProps> = ({ isOpen, onClos
                         </button>
                         <button
                             onClick={onClose}
-                            className="p-2 rounded-full hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all border border-transparent hover:border-white/20"
+                            className="p-2 rounded-full hover:bg-foreground/10 text-muted-foreground hover:text-foreground transition-all border border-transparent hover:border-border/20"
                             aria-label="Close"
                         >
                             <X className="w-6 h-6" />
@@ -57,7 +57,7 @@ export const BookViewerModal: React.FC<BookViewerModalProps> = ({ isOpen, onClos
                     <div className="premium-blurBottom bottom-1/4 -right-20 opacity-10" />
 
                     {/* Left Panel: Cover & Info (Hidden on very small screens or sticky) */}
-                    <div className="md:col-span-4 lg:col-span-3 p-6 border-r border-white/10 bg-black/5 flex flex-col items-center justify-center overflow-y-auto">
+                    <div className="md:col-span-4 lg:col-span-3 p-6 border-r border-border/10 bg-foreground/5 flex flex-col items-center justify-center overflow-y-auto">
                         <div className="space-y-6 w-full max-w-[240px]">
                             <div className="book-frame aspect-[3/4] shadow-2xl relative group">
                                 <img
@@ -67,7 +67,7 @@ export const BookViewerModal: React.FC<BookViewerModalProps> = ({ isOpen, onClos
                                 />
                                 <button
                                     onClick={() => window.open(book.coverDownloadUrl || book.thumbnailUrl, '_blank')}
-                                    className="absolute bottom-4 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 text-primary p-2 rounded-lg shadow-lg hover:scale-105"
+                                    className="absolute bottom-4 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 text-primary p-2 rounded-lg shadow-lg hover:scale-105 border border-border/50"
                                     title="Download Cover"
                                 >
                                     <Image className="w-5 h-5" />
@@ -79,7 +79,7 @@ export const BookViewerModal: React.FC<BookViewerModalProps> = ({ isOpen, onClos
                                     <span className="text-lg">{book.themeEmoji}</span>
                                     Story Details
                                 </p>
-                                <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-xs text-muted-foreground space-y-1">
+                                <div className="p-3 rounded-xl bg-foreground/5 border border-border/10 text-xs text-muted-foreground space-y-1">
                                     <p>Created: {new Date(book.timestamp).toLocaleDateString()}</p>
                                     <p>Child: {book.childName}</p>
                                     <p>Theme: {book.themeName}</p>

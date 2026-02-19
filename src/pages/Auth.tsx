@@ -2,14 +2,28 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { BookOpen, Mail, Lock, User, Sparkles, Star } from 'lucide-react';
+import { DarkModeToggle } from '@/components/DarkModeToggle';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const navigate = useNavigate();
+
+  // Load saved credentials on mount
+  React.useEffect(() => {
+    const savedEmail = localStorage.getItem('magic_remember_email');
+    const savedRemember = localStorage.getItem('magic_remember_me') === 'true';
+
+    if (savedRemember && savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,6 +37,16 @@ export default function Auth() {
           password,
         });
         if (error) throw error;
+
+        // Handle "Remember Me"
+        if (rememberMe) {
+          localStorage.setItem('magic_remember_email', email);
+          localStorage.setItem('magic_remember_me', 'true');
+        } else {
+          localStorage.removeItem('magic_remember_email');
+          localStorage.setItem('magic_remember_me', 'false');
+        }
+
         navigate('/');
       } else {
         const { error } = await supabase.auth.signUp({
@@ -50,6 +74,11 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen gradient-dreamy flex items-center justify-center px-4 py-12 relative overflow-hidden">
+      {/* Theme Toggle */}
+      <div className="absolute top-6 right-6 z-50">
+        <DarkModeToggle />
+      </div>
+
       {/* Decorative Background Elements */}
       <div className="absolute top-20 left-10 text-primary/20 animate-float-slow">
         <Sparkles className="w-12 h-12" />
@@ -78,7 +107,7 @@ export default function Auth() {
         </div>
 
         {/* Auth Card */}
-        <div className="card-magical backdrop-blur-xl bg-white/40 border-white/30 shadow-2xl p-8 sm:p-10 rounded-3xl animate-scale-in">
+        <div className="glass-card p-8 sm:p-10 rounded-3xl animate-scale-in relative">
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-foreground">
               {isLogin ? 'Welcome Back!' : 'Create Account'}
@@ -102,7 +131,7 @@ export default function Auth() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="magic@story.com"
                 required
-                className="w-full px-5 py-3.5 rounded-2xl border-2 border-border/50 bg-white/50 text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 transition-all duration-300"
+                className="w-full px-5 py-3.5 rounded-2xl border-2 border-border/50 bg-background/50 text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 transition-all duration-300"
               />
             </div>
 
@@ -118,16 +147,33 @@ export default function Auth() {
                 placeholder="••••••••"
                 required
                 minLength={6}
-                className="w-full px-5 py-3.5 rounded-2xl border-2 border-border/50 bg-white/50 text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 transition-all duration-300"
+                className="w-full px-5 py-3.5 rounded-2xl border-2 border-border/50 bg-background/50 text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 transition-all duration-300"
               />
             </div>
+
+            {isLogin && (
+              <div className="flex items-center space-x-2 ml-1">
+                <Checkbox
+                  id="remember"
+                  checked={rememberMe}
+                  onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+                  className="border-primary/50 data-[state=checked]:bg-primary"
+                />
+                <label
+                  htmlFor="remember"
+                  className="text-sm font-medium text-muted-foreground cursor-pointer leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Remember me
+                </label>
+              </div>
+            )}
 
             {/* Error/Success Messages */}
             {message && (
               <div
                 className={`p-4 rounded-2xl text-sm flex items-center gap-3 animate-shake ${message.type === 'success'
-                    ? 'bg-success/10 text-success border border-success/30'
-                    : 'bg-destructive/10 text-destructive border border-destructive/30'
+                  ? 'bg-success/10 text-success border border-success/30'
+                  : 'bg-destructive/10 text-destructive border border-destructive/30'
                   }`}
               >
                 <div className={`w-2 h-2 rounded-full ${message.type === 'success' ? 'bg-success' : 'bg-destructive'}`} />
@@ -141,7 +187,7 @@ export default function Auth() {
               className="w-full btn-magic py-4 rounded-2xl flex items-center justify-center gap-3 shadow-lg hover:shadow-primary/30 transition-all duration-300 active:scale-[0.98]"
             >
               {loading ? (
-                <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />
+                <div className="w-6 h-6 border-3 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
               ) : (
                 <>
                   <User className="w-5 h-5" />

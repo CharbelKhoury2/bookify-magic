@@ -70,13 +70,13 @@ export const HistoryPanel: React.FC = () => {
           <button
             onClick={() => setView('active')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-2 ${view === 'active'
-              ? 'bg-primary text-white shadow-sm'
+              ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:bg-secondary/50'
               }`}
           >
             <Clock className="w-3.5 h-3.5" />
             Recent
-            <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${view === 'active' ? 'bg-white/20' : 'bg-secondary'
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${view === 'active' ? 'bg-primary-foreground/20' : 'bg-secondary'
               }`}>
               {history.length}
             </span>
@@ -84,13 +84,13 @@ export const HistoryPanel: React.FC = () => {
           <button
             onClick={() => setView('trash')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-2 ${view === 'trash'
-              ? 'bg-destructive/80 text-white shadow-sm'
+              ? 'bg-destructive/80 text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:bg-secondary/50'
               }`}
           >
             <Trash2 className="w-3.5 h-3.5" />
             Trash
-            <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${view === 'trash' ? 'bg-white/20' : 'bg-secondary'
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${view === 'trash' ? 'bg-primary-foreground/20' : 'bg-secondary'
               }`}>
               {deletedHistory.length}
             </span>
@@ -215,7 +215,7 @@ export const HistoryPanel: React.FC = () => {
 
       {/* Confirmation Dialog */}
       <AlertDialog open={confirmConfig.isOpen} onOpenChange={(open) => setConfirmConfig(prev => ({ ...prev, isOpen: open }))}>
-        <AlertDialogContent className="max-w-[400px] bg-background/95 backdrop-blur-xl border-white/20 shadow-2xl rounded-3xl">
+        <AlertDialogContent className="max-w-[400px] bg-background/95 backdrop-blur-xl border-border/20 shadow-2xl rounded-3xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl font-bold">{confirmConfig.title}</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
@@ -223,7 +223,7 @@ export const HistoryPanel: React.FC = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl border-white/10 hover:bg-white/5">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-xl border-border/10 hover:bg-foreground/5">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmConfig.onConfirm}
               className={`rounded-xl px-6 ${confirmConfig.isDestructive

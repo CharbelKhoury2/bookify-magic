@@ -6,6 +6,7 @@ import { useAuth } from './hooks/useAuth';
 import { BookOpen, User, LogOut } from 'lucide-react';
 import Auth from './pages/Auth';
 import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 function HomePage() {
   const { user, loading, signOut } = useAuth();
@@ -86,6 +87,7 @@ function App() {
         </Routes>
       </BrowserRouter>
       <Analytics />
+      <SpeedInsights />
     </>
   );
 }

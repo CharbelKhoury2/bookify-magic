@@ -5,6 +5,8 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { useAuth } from './hooks/useAuth';
 import { BookOpen, User, LogOut } from 'lucide-react';
 import Auth from './pages/Auth';
+import { ThemeProvider } from './components/ThemeProvider';
+import { DarkModeToggle } from './components/DarkModeToggle';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 
@@ -18,6 +20,7 @@ function HomePage() {
         <header className="text-center mb-10 sm:mb-12 animate-fade-in">
           <div className="flex justify-end mb-4">
             <div className="flex items-center gap-3">
+              <DarkModeToggle />
               <span className="text-sm text-muted-foreground hidden sm:block">
                 {user?.email}
               </span>
@@ -78,7 +81,7 @@ function App() {
   }
 
   return (
-    <>
+    <ThemeProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={user ? <HomePage /> : <Auth />} />
@@ -88,7 +91,7 @@ function App() {
       </BrowserRouter>
       <Analytics />
       <SpeedInsights />
-    </>
+    </ThemeProvider>
   );
 }
 

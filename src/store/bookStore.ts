@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { Theme, ProcessedPhoto, HistoryItem } from '../utils/types';
 
 interface BookStore {
@@ -28,51 +29,64 @@ interface BookStore {
   reset: () => void;
 }
 
-export const useBookStore = create<BookStore>((set) => ({
-  childName: '',
-  selectedTheme: null,
-  uploadedPhoto: null,
-  processedPhoto: null,
-  isGenerating: false,
-  generationProgress: 0,
-  generatedPDF: null,
-  coverImage: null,
-  pdfDownloadUrl: null,
-  pdfDownloadBlob: null,
-  coverDownloadUrl: null,
-  setChildName: (name) => set({ childName: name }),
-  setSelectedTheme: (theme) => set({ selectedTheme: theme }),
-  setUploadedPhoto: (photo) => set({ uploadedPhoto: photo }),
-  setProcessedPhoto: (photo) => set({ processedPhoto: photo }),
-  setIsGenerating: (status) => set({ isGenerating: status }),
-  setGenerationProgress: (p) => set({ generationProgress: p }),
-  setGeneratedPDF: (url) => set({ generatedPDF: url }),
-  setCoverImage: (url) => set({ coverImage: url }),
-  setPdfDownloadUrl: (url) => set({ pdfDownloadUrl: url }),
-  setPdfDownloadBlob: (blob) => set({ pdfDownloadBlob: blob }),
-  setCoverDownloadUrl: (url) => set({ coverDownloadUrl: url }),
-  loadBook: (data) => set({
-    childName: data.childName,
-    selectedTheme: { id: '', name: data.themeName, emoji: data.themeEmoji, description: '', colors: { primary: '', secondary: '', accent: '', background: '' } },
-    generatedPDF: data.pdfUrl,
-    coverImage: data.thumbnailUrl,
-    pdfDownloadUrl: data.pdfDownloadUrl || null,
-    coverDownloadUrl: data.coverDownloadUrl || null,
-    isGenerating: false,
-    generationProgress: 100
-  }),
-  reset: () => set({
-    childName: '',
-    selectedTheme: null,
-    uploadedPhoto: null,
-    processedPhoto: null,
-    isGenerating: false,
-    generationProgress: 0,
-    generatedPDF: null,
-    coverImage: null,
-    pdfDownloadUrl: null,
-    pdfDownloadBlob: null,
-    coverDownloadUrl: null
-  })
-}));
+export const useBookStore = create<BookStore>()(
+  persist(
+    (set) => ({
+      childName: '',
+      selectedTheme: null,
+      uploadedPhoto: null,
+      processedPhoto: null,
+      isGenerating: false,
+      generationProgress: 0,
+      generatedPDF: null,
+      coverImage: null,
+      pdfDownloadUrl: null,
+      pdfDownloadBlob: null,
+      coverDownloadUrl: null,
+      setChildName: (name) => set({ childName: name }),
+      setSelectedTheme: (theme) => set({ selectedTheme: theme }),
+      setUploadedPhoto: (photo) => set({ uploadedPhoto: photo }),
+      setProcessedPhoto: (photo) => set({ processedPhoto: photo }),
+      setIsGenerating: (status) => set({ isGenerating: status }),
+      setGenerationProgress: (p) => set({ generationProgress: p }),
+      setGeneratedPDF: (url) => set({ generatedPDF: url }),
+      setCoverImage: (url) => set({ coverImage: url }),
+      setPdfDownloadUrl: (url) => set({ pdfDownloadUrl: url }),
+      setPdfDownloadBlob: (blob) => set({ pdfDownloadBlob: blob }),
+      setCoverDownloadUrl: (url) => set({ coverDownloadUrl: url }),
+      loadBook: (data) => set({
+        childName: data.childName,
+        selectedTheme: { id: '', name: data.themeName, emoji: data.themeEmoji, description: '', colors: { primary: '', secondary: '', accent: '', background: '' } },
+        generatedPDF: data.pdfUrl,
+        coverImage: data.thumbnailUrl,
+        pdfDownloadUrl: data.pdfDownloadUrl || null,
+        coverDownloadUrl: data.coverDownloadUrl || null,
+        isGenerating: false,
+        generationProgress: 100
+      }),
+      reset: () => set({
+        childName: '',
+        selectedTheme: null,
+        uploadedPhoto: null,
+        processedPhoto: null,
+        isGenerating: false,
+        generationProgress: 0,
+        generatedPDF: null,
+        coverImage: null,
+        pdfDownloadUrl: null,
+        pdfDownloadBlob: null,
+        coverDownloadUrl: null
+      })
+    }),
+    {
+      name: 'book-generator-storage',
+      partialize: (state) => ({
+        childName: state.childName,
+        selectedTheme: state.selectedTheme,
+        // Don't persist Files or Blobs as they can't be stringified
+      }),
+    }
+  )
+);
+
 

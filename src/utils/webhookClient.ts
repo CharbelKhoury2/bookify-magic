@@ -59,6 +59,7 @@ export async function startGenerationViaWebhook(
     throw new Error(error.message || 'Book generation service error');
   }
 
+  console.log('📦 Received response from edge function:', data);
   const start: GenerationStartResponse = data;
 
   // If direct PDF binary response
@@ -100,13 +101,22 @@ export async function startGenerationViaWebhook(
         pdfBlob = base64ToBlob(pdfData.base64, 'application/pdf');
       }
 
-      return {
+      const result = {
         pdfUrl: pdfData.previewUrl || pdfData.url,
         pdfBlob: pdfBlob,
         coverImageUrl: coverData.previewUrl || coverData.url || (coverData.base64 ? `data:image/jpeg;base64,${coverData.base64.replace(/^data:image\/[a-z]+;base64,/, '')}` : undefined),
         pdfDownloadUrl: pdfData.downloadUrl || pdfData.url,
         coverDownloadUrl: coverData.downloadUrl || coverData.url
       };
+
+      console.log('✨ Extracted file data:', {
+        hasPdf: !!result.pdfUrl || !!result.pdfBlob,
+        hasCover: !!result.coverImageUrl,
+        pdfUrl: result.pdfUrl?.substring(0, 50) + '...',
+        coverUrl: result.coverImageUrl?.substring(0, 50) + '...'
+      });
+
+      return result;
     }
   }
 
@@ -185,7 +195,7 @@ function extractFileData(obj: any): { url?: string, previewUrl?: string, downloa
   if (obj.images?.[0]?.data) return { base64: obj.images[0].data };
 
   // 2. Check for standard URL fields
-  const urlFields = ['url', 'webContentLink', 'webViewLink', 'link', 'href', 'downloadUrl', 'previewUrl', 'contentUrl'];
+  const urlFields = ['url', 'webContentLink', 'webViewLink', 'link', 'href', 'downloadUrl', 'previewUrl', 'contentUrl', 'file', 'attachment'];
   for (const field of urlFields) {
     if (typeof obj[field] === 'string' && obj[field].startsWith('http')) {
       return { url: obj[field] };
@@ -193,7 +203,7 @@ function extractFileData(obj: any): { url?: string, previewUrl?: string, downloa
   }
 
   // 3. Check for standard Base64/Data fields
-  const dataFields = ['data', 'base64', 'content', 'pdfBase64', 'fileContent', 'image_data', 'binary'];
+  const dataFields = ['data', 'base64', 'content', 'pdfBase64', 'fileContent', 'image_data', 'binary', 'output', 'body'];
   for (const field of dataFields) {
     if (typeof obj[field] === 'string' && (obj[field].length > 100 || obj[field].includes(';base64,'))) {
       return { base64: obj[field] };

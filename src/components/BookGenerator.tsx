@@ -42,6 +42,20 @@ export const BookGenerator: React.FC = () => {
   const [generatedBlob, setGeneratedBlob] = useState<Blob | null>(null);
   const [showFinished, setShowFinished] = useState(false);
 
+  // Prevention for accidental refresh during generation
+  React.useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isGenerating) {
+        e.preventDefault();
+        e.returnValue = ''; // Standard way to show "Are you sure you want to leave?"
+        return '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isGenerating]);
+
   const showToast = (message: string, type: ToastType = 'info') => {
     setToast({ message, type });
   };

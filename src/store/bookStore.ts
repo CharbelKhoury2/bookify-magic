@@ -14,6 +14,8 @@ interface BookStore {
   pdfDownloadUrl: string | null;
   pdfDownloadBlob: Blob | null;
   coverDownloadUrl: string | null;
+  currentGenerationId: string | null;
+  photoName: string | null;
   setChildName: (name: string) => void;
   setSelectedTheme: (theme: Theme | null) => void;
   setUploadedPhoto: (photo: File | null) => void;
@@ -25,6 +27,7 @@ interface BookStore {
   setPdfDownloadUrl: (url: string | null) => void;
   setPdfDownloadBlob: (blob: Blob | null) => void;
   setCoverDownloadUrl: (url: string | null) => void;
+  setCurrentGenerationId: (id: string | null) => void;
   loadBook: (data: HistoryItem) => void;
   reset: () => void;
 }
@@ -43,9 +46,11 @@ export const useBookStore = create<BookStore>()(
       pdfDownloadUrl: null,
       pdfDownloadBlob: null,
       coverDownloadUrl: null,
+      currentGenerationId: null,
+      photoName: null,
       setChildName: (name) => set({ childName: name }),
       setSelectedTheme: (theme) => set({ selectedTheme: theme }),
-      setUploadedPhoto: (photo) => set({ uploadedPhoto: photo }),
+      setUploadedPhoto: (photo) => set({ uploadedPhoto: photo, photoName: photo ? photo.name : null }),
       setProcessedPhoto: (photo) => set({ processedPhoto: photo }),
       setIsGenerating: (status) => set({ isGenerating: status }),
       setGenerationProgress: (p) => set({ generationProgress: p }),
@@ -54,6 +59,7 @@ export const useBookStore = create<BookStore>()(
       setPdfDownloadUrl: (url) => set({ pdfDownloadUrl: url }),
       setPdfDownloadBlob: (blob) => set({ pdfDownloadBlob: blob }),
       setCoverDownloadUrl: (url) => set({ coverDownloadUrl: url }),
+      setCurrentGenerationId: (id) => set({ currentGenerationId: id }),
       loadBook: (data) => set({
         childName: data.childName,
         selectedTheme: { id: '', name: data.themeName, emoji: data.themeEmoji, description: '', colors: { primary: '', secondary: '', accent: '', background: '' } },
@@ -62,7 +68,8 @@ export const useBookStore = create<BookStore>()(
         pdfDownloadUrl: data.pdfDownloadUrl || null,
         coverDownloadUrl: data.coverDownloadUrl || null,
         isGenerating: false,
-        generationProgress: 100
+        generationProgress: 100,
+        currentGenerationId: null
       }),
       reset: () => set({
         childName: '',
@@ -75,7 +82,9 @@ export const useBookStore = create<BookStore>()(
         coverImage: null,
         pdfDownloadUrl: null,
         pdfDownloadBlob: null,
-        coverDownloadUrl: null
+        coverDownloadUrl: null,
+        currentGenerationId: null,
+        photoName: null
       })
     }),
     {
@@ -83,10 +92,15 @@ export const useBookStore = create<BookStore>()(
       partialize: (state) => ({
         childName: state.childName,
         selectedTheme: state.selectedTheme,
-        // Don't persist Files or Blobs as they can't be stringified
+        isGenerating: state.isGenerating,
+        generationProgress: state.generationProgress,
+        currentGenerationId: state.currentGenerationId,
+        processedPhoto: state.processedPhoto,
+        photoName: state.photoName,
       }),
     }
   )
 );
+
 
 

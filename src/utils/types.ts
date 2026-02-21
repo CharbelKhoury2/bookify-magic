@@ -59,3 +59,13 @@ export interface GenerationState {
   stage: 'idle' | 'processing' | 'generating' | 'complete' | 'error';
   error?: string;
 }
+
+export interface BookGeneration {
+  id: string;
+  user_id: string | null;
+  child_name: string;
+  theme_id: string;
+  theme_name: string;
+  status: 'pending' | 'completed' | 'failed';
+  created_at: string;
+}

@@ -24,6 +24,47 @@ export interface GenerationStatusResponse {
   message?: string;
 }
 
+/**
+ * Logs the start of a generation in the database
+ */
+export async function logGenerationStart(childName: string, themeId: string, themeName: string) {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data, error } = await supabase
+    .from('book_generations')
+    .insert({
+      child_name: childName,
+      theme_id: themeId,
+      theme_name: themeName,
+      user_id: user?.id || null,
+      status: 'pending'
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('❌ Failed to log generation start:', error);
+    return null;
+  }
+
+  console.log('📝 Generation logged in DB:', data.id);
+  return data.id as string;
+}
+
+/**
+ * Updates the status of a generation in the database
+ */
+export async function updateGenerationStatus(id: string, status: 'completed' | 'failed') {
+  const { error } = await supabase
+    .from('book_generations')
+    .update({ status })
+    .eq('id', id);
+
+  if (error) {
+    console.error('❌ Failed to update generation status:', error);
+  }
+}
+
 export async function startGenerationViaWebhook(
   childName: string,
   theme: Theme,

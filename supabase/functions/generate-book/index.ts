@@ -131,9 +131,12 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("Edge function error:", err);
+    // Sanitize error logging as per security scan (Info)
+    // Detailed error is logged to internal console but not returned to client
+    console.error("Book generation error:", err instanceof Error ? err.message : "Internal Error");
+
     return new Response(
-      JSON.stringify({ error: "Internal server error" }),
+      JSON.stringify({ error: "A magical error occurred during generation. Please try again later." }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

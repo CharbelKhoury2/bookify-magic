@@ -10,7 +10,7 @@ interface PhotoUploaderProps {
 }
 
 export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ onError }) => {
-  const { uploadedPhoto, processedPhoto, setUploadedPhoto, setProcessedPhoto } = useBookStore();
+  const { uploadedPhoto, processedPhoto, setUploadedPhoto, setProcessedPhoto, photoName } = useBookStore();
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -67,7 +67,7 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ onError }) => {
             </button>
           </div>
           <p className="text-center text-sm text-muted-foreground mt-3">
-            {uploadedPhoto?.name}
+            {uploadedPhoto?.name || photoName || 'Uploaded Photo'}
           </p>
         </div>
       ) : (
@@ -76,8 +76,8 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ onError }) => {
           className={`
             border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer
             transition-all duration-300 hover:border-primary hover:bg-primary/5
-            ${isDragActive 
-              ? 'border-primary bg-primary/10 scale-102' 
+            ${isDragActive
+              ? 'border-primary bg-primary/10 scale-102'
               : 'border-border bg-card'
             }
           `}

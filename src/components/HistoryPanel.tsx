@@ -27,7 +27,7 @@ export const HistoryPanel: React.FC = () => {
     clearHistory,
     clearDeletedHistory
   } = useHistoryStore();
-  const { loadBook } = useBookStore();
+  const { loadBook, isGenerating, childName, selectedTheme, processedPhoto } = useBookStore();
   const { toast } = useToast();
   const [viewingBook, setViewingBook] = React.useState<HistoryItem | null>(null);
   const [view, setView] = React.useState<'active' | 'trash'>('active');
@@ -144,28 +144,49 @@ export const HistoryPanel: React.FC = () => {
 
       <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
         {view === 'active' ? (
-          history.length === 0 ? (
-            <div className="text-center py-10 opacity-60">
-              <div className="text-3xl mb-2">📚</div>
-              <p className="text-sm font-medium">Your library is empty</p>
-              <p className="text-[11px] text-muted-foreground">New books will appear here</p>
-            </div>
-          ) : (
-            history.map((item) => (
-              <HistoryCard
-                key={item.id}
-                item={item}
-                onRemove={() => {
-                  removeFromHistory(item.id);
-                  toast({
-                    title: "Moved to Trash",
-                    description: `"${item.childName}'s Adventure" can be restored from the Trash tab.`,
-                  });
-                }}
-                onClick={() => handleCardClick(item)}
-              />
-            ))
-          )
+          <>
+            {isGenerating && (
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border-2 border-primary/20 animate-pulse cursor-wait">
+                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
+                  {processedPhoto?.thumbnail ? (
+                    <img src={processedPhoto.thumbnail} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-xl">✨</span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold text-primary text-sm truncate">
+                    {childName || 'New'}'s {selectedTheme?.name || 'Story'}
+                  </h4>
+                  <p className="text-[10px] text-primary/60 font-medium uppercase tracking-tighter">Creating Magic...</p>
+                </div>
+                <div className="w-2 h-2 rounded-full bg-primary animate-ping" />
+              </div>
+            )}
+
+            {history.length === 0 && !isGenerating ? (
+              <div className="text-center py-10 opacity-60">
+                <div className="text-3xl mb-2">📚</div>
+                <p className="text-sm font-medium">Your library is empty</p>
+                <p className="text-[11px] text-muted-foreground">New books will appear here</p>
+              </div>
+            ) : (
+              history.map((item) => (
+                <HistoryCard
+                  key={item.id}
+                  item={item}
+                  onRemove={() => {
+                    removeFromHistory(item.id);
+                    toast({
+                      title: "Moved to Trash",
+                      description: `"${item.childName}'s Adventure" can be restored from the Trash tab.`,
+                    });
+                  }}
+                  onClick={() => handleCardClick(item)}
+                />
+              ))
+            )}
+          </>
         ) : (
           deletedHistory.length === 0 ? (
             <div className="text-center py-10 opacity-60">

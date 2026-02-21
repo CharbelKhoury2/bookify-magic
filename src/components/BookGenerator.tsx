@@ -10,7 +10,7 @@ import { useBookStore } from '../store/bookStore';
 import { useHistoryStore } from '../store/historyStore';
 import { validateBookData } from '../utils/validators';
 import { downloadPDF, sanitizeFileName } from '../utils/pdfGenerator';
-import { startGenerationViaWebhook } from '../utils/webhookClient';
+import { startGenerationViaWebhook, logGenerationStart, updateGenerationStatus } from '../utils/webhookClient';
 
 export const BookGenerator: React.FC = () => {
   const {
@@ -33,6 +33,8 @@ export const BookGenerator: React.FC = () => {
     setPdfDownloadBlob,
     coverDownloadUrl,
     setCoverDownloadUrl,
+    currentGenerationId,
+    setCurrentGenerationId,
     reset
   } = useBookStore();
 
@@ -60,6 +62,26 @@ export const BookGenerator: React.FC = () => {
     setToast({ message, type });
   };
 
+  // Initialization: If we were generating before refresh, check if we need to clean up
+  React.useEffect(() => {
+    if (isGenerating) {
+      console.log('🔄 Resuming generation state after refresh...');
+      showToast('Magic is still in progress! Please wait...', 'info');
+
+      // Safety timeout: If it stays "generating" for too long without a result, reset it
+      const timer = setTimeout(() => {
+        if (isGenerating) {
+          setIsGenerating(false);
+          setGenerationProgress(0);
+          setCurrentGenerationId(null);
+          showToast('The magic session timed out. Please try again.', 'error');
+        }
+      }, 180000); // 3 minutes
+
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   const handleGenerate = async () => {
     const validation = validateBookData(childName, selectedTheme?.id || null, uploadedPhoto);
     if (!validation.isValid) {
@@ -69,6 +91,7 @@ export const BookGenerator: React.FC = () => {
 
     if (!selectedTheme || !uploadedPhoto) return;
 
+    let generationId: string | null = null;
     try {
       setIsGenerating(true);
       setGenerationProgress(0);
@@ -77,12 +100,21 @@ export const BookGenerator: React.FC = () => {
       setPdfDownloadBlob(null);
       setCoverDownloadUrl(null);
 
+      // Log the start of generation in DB
+      generationId = await logGenerationStart(childName.trim(), selectedTheme.id, selectedTheme.name);
+      setCurrentGenerationId(generationId);
+
       const { pdfBlob, pdfUrl, coverImageUrl, pdfDownloadUrl: downloadPdfUrl, coverDownloadUrl: downloadCoverUrl } = await startGenerationViaWebhook(
         childName.trim(),
         selectedTheme,
         uploadedPhoto,
         (p) => setGenerationProgress(p)
       );
+
+      // Update DB to completed
+      if (generationId) {
+        await updateGenerationStatus(generationId, 'completed');
+      }
 
       let finalPdfUrl: string | null = null;
       if (pdfBlob) {
@@ -133,11 +165,19 @@ export const BookGenerator: React.FC = () => {
       setGeneratedPDF(finalPdfUrl);
       setIsGenerating(false);
       setGenerationProgress(100);
+      setCurrentGenerationId(null);
       showToast('Your magical book is ready!', 'success');
     } catch (error) {
       console.error('Generation error:', error);
+
+      // Update DB to failed
+      if (generationId) {
+        await updateGenerationStatus(generationId, 'failed');
+      }
+
       setIsGenerating(false);
       setGenerationProgress(0);
+      setCurrentGenerationId(null);
       const message = error instanceof Error ? error.message : 'Failed to generate book. Please try again.';
       showToast(message, 'error');
     }

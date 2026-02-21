@@ -111,10 +111,10 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start relative z-10">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center relative z-10">
             {coverImage && (
-              <div className="md:col-span-4 lg:col-span-3">
-                <div className="space-y-3">
+              <div className="md:col-span-5 lg:col-span-4">
+                <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-bold text-primary uppercase tracking-widest">Cover Art</p>
                     <button
@@ -126,7 +126,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
                     </button>
                   </div>
                   <div
-                    className="book-frame overflow-hidden aspect-[3/4] shadow-float hover:scale-[1.02] transition-all duration-500 cursor-zoom-in relative group"
+                    className="book-frame overflow-hidden aspect-[3/4] shadow-glow hover:scale-[1.03] transition-all duration-500 cursor-zoom-in relative group border-[16px] border-white dark:border-card"
                     onClick={() => setIsImageModalOpen(true)}
                   >
                     <img
@@ -135,7 +135,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
                       className="w-full h-full object-cover"
                     />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center">
-                      <Maximize2 className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transform scale-50 group-hover:scale-100 transition-all duration-300 drop-shadow-md" />
+                      <Maximize2 className="w-10 h-10 text-white opacity-0 group-hover:opacity-100 transform scale-50 group-hover:scale-100 transition-all duration-300 drop-shadow-md" />
                     </div>
                   </div>
                 </div>
@@ -143,7 +143,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
             )}
 
             {/* PDF Preview Section */}
-            <div className={coverImage ? "md:col-span-8 lg:col-span-9" : "md:col-span-12"}>
+            <div className={coverImage ? "md:col-span-7 lg:col-span-8" : "md:col-span-12"}>
               <div className="space-y-3">
                 <p className="text-xs font-bold text-primary uppercase tracking-widest text-center md:text-left">Story Preview</p>
                 <div className="book-frame group mx-auto cursor-default">

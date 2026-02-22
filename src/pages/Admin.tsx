@@ -1,12 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { ShieldCheck, Users, Settings as SettingsIcon, Plus, Trash2, UserPlus, Shield } from 'lucide-react';
+import {
+    ShieldCheck,
+    Users,
+    Settings as SettingsIcon,
+    User,
+    UserPlus,
+    Trash2,
+    Mail,
+    Shield,
+    Key,
+    Camera,
+    LogOut,
+    ChevronRight,
+    Sparkles,
+    Lock,
+    Globe,
+    Bell
+} from 'lucide-react';
 import { UserProfile, AppRole } from '@/utils/types';
 import { Toast, ToastType } from '@/components/Toast';
+import { Link } from 'react-router-dom';
+
+type AdminTab = 'users' | 'settings' | 'profile';
 
 export default function Admin() {
-    const { user, isAdmin, loading: authLoading } = useAuth();
+    const { user, role, isAdmin, loading: authLoading, signOut } = useAuth();
+    const [activeTab, setActiveTab] = useState<AdminTab>('users');
     const [profiles, setProfiles] = useState<UserProfile[]>([]);
     const [loading, setLoading] = useState(true);
     const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
@@ -20,48 +41,40 @@ export default function Admin() {
     const fetchUsers = async () => {
         try {
             setLoading(true);
-            // We try to fetch from profiles table and join with user_roles
-            // Note: This requires the profiles table to exist in public schema
             const { data: rolesData, error: rolesError } = await supabase
                 .from('user_roles')
-                .select(`
-          user_id,
-          role
-        `);
+                .select(`user_id, role`);
 
             if (rolesError) throw rolesError;
 
-            // Also try to get profile data (email, etc)
             const { data: profilesData, error: profilesError } = await supabase
                 .from('profiles' as any)
                 .select('*');
 
-            // Combine the data
             const combined: UserProfile[] = (profilesData || []).map((p: any) => {
                 const roleObj = rolesData.find(r => r.user_id === p.id);
                 return {
                     id: p.id,
                     email: p.email,
                     role: (roleObj?.role as AppRole) || 'user',
-                    created_at: p.created_at,
-                    last_sign_in: p.last_sign_in
+                    created_at: p.created_at
                 };
             });
 
             setProfiles(combined);
         } catch (error: any) {
             console.error('Error fetching users:', error);
-            showToast('Failed to load users. Make sure the profiles table exists.', 'error');
+            showToast('Users list restricted. Check profiles table.', 'error');
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        if (isAdmin) {
+        if (isAdmin && activeTab === 'users') {
             fetchUsers();
         }
-    }, [isAdmin]);
+    }, [isAdmin, activeTab]);
 
     const handleUpdateRole = async (userId: string, newRole: AppRole) => {
         try {
@@ -71,8 +84,7 @@ export default function Admin() {
                 .eq('user_id', userId);
 
             if (error) throw error;
-
-            showToast('User role updated successfully!', 'success');
+            showToast('User role updated!', 'success');
             fetchUsers();
         } catch (error: any) {
             showToast(error.message, 'error');
@@ -83,9 +95,6 @@ export default function Admin() {
         e.preventDefault();
         try {
             setLoading(true);
-            // Note: Standard Supabase signUp won't work perfectly for "Admin creating others" 
-            // without using the Admin Auth API (service role), which we avoid on frontend.
-            // But we can use the signUp function which will send a confirmation email.
             const { data, error } = await supabase.auth.signUp({
                 email: newUser.email,
                 password: newUser.password,
@@ -94,14 +103,13 @@ export default function Admin() {
             if (error) throw error;
 
             if (data.user) {
-                // Update their role immediately
                 await supabase
                     .from('user_roles')
                     .update({ role: newUser.role })
                     .eq('user_id', data.user.id);
             }
 
-            showToast('User invited! They will need to confirm their email.', 'success');
+            showToast('User invitation sent!', 'success');
             setIsAddingUser(false);
             setNewUser({ email: '', password: '', role: 'user' });
             fetchUsers();
@@ -112,202 +120,357 @@ export default function Admin() {
         }
     };
 
-    if (authLoading) return <div className="p-20 text-center">Loading...</div>;
-    if (!isAdmin) return <div className="p-20 text-center text-destructive font-bold">Access Denied</div>;
+    const handlePasswordReset = async () => {
+        try {
+            if (!user?.email) return;
+            const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+                redirectTo: `${window.location.origin}/auth`,
+            });
+            if (error) throw error;
+            showToast('Password reset link sent to your email!', 'success');
+        } catch (error: any) {
+            showToast(error.message, 'error');
+        }
+    };
+
+    if (authLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    if (!isAdmin) return <div className="min-h-screen flex items-center justify-center text-destructive font-bold">403 - Forbidden Access</div>;
 
     return (
         <div className="min-h-screen gradient-dreamy py-12 px-4">
-            <div className="max-w-6xl mx-auto space-y-8">
-                {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-3xl font-bold flex items-center gap-3">
-                            <ShieldCheck className="w-8 h-8 text-primary" />
-                            Admin Control Panel
-                        </h1>
-                        <p className="text-muted-foreground">Manage users, roles, and application settings.</p>
-                    </div>
-                    <button
-                        onClick={() => setIsAddingUser(true)}
-                        className="btn-magic flex items-center justify-center gap-2"
-                    >
-                        <UserPlus className="w-5 h-5" />
-                        Add New User
-                    </button>
+            <div className="max-w-7xl mx-auto space-y-8">
+
+                {/* Navigation Breadcrumb */}
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+                    <Link to="/" className="hover:text-primary transition-colors">Home</Link>
+                    <ChevronRight className="w-4 h-4" />
+                    <span className="font-semibold text-foreground">Admin Console</span>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* User Management List */}
-                    <div className="lg:col-span-2 space-y-4">
-                        <div className="card-magical">
-                            <div className="flex items-center gap-2 mb-6">
-                                <Users className="w-5 h-5 text-primary" />
-                                <h2 className="text-xl font-bold">User Management</h2>
+                {/* Header Section */}
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                    <div>
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-widest mb-3">
+                            <Lock className="w-3 h-3" />
+                            Secure Admin Area
+                        </div>
+                        <h1 className="text-4xl font-bold flex items-center gap-3">
+                            <ShieldCheck className="w-10 h-10 text-primary" />
+                            Command Center
+                        </h1>
+                        <p className="text-muted-foreground text-lg">Central hub for users, configuration, and your profile.</p>
+                    </div>
+
+                    <div className="flex bg-card p-1 rounded-2xl border-2 border-border shadow-sm">
+                        {[
+                            { id: 'users', label: 'Users', icon: Users },
+                            { id: 'settings', label: 'Settings', icon: SettingsIcon },
+                            { id: 'profile', label: 'My Profile', icon: User },
+                        ].map((tab) => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id as AdminTab)}
+                                className={`
+                  flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold transition-all
+                  ${activeTab === tab.id
+                                        ? 'bg-primary text-primary-foreground shadow-glow'
+                                        : 'text-muted-foreground hover:bg-secondary/50'
+                                    }
+                `}
+                            >
+                                <tab.icon className="w-4 h-4" />
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Content Area */}
+                <div className="grid grid-cols-1 gap-8 animate-fade-in">
+
+                    {/* USER MANAGEMENT TAB */}
+                    {activeTab === 'users' && (
+                        <div className="space-y-6">
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-2xl font-bold">User Database</h2>
+                                <button
+                                    onClick={() => setIsAddingUser(true)}
+                                    className="btn-magic flex items-center gap-2"
+                                >
+                                    <UserPlus className="w-4 h-4" />
+                                    Invite User
+                                </button>
                             </div>
 
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="text-xs uppercase bg-secondary/30">
-                                        <tr>
-                                            <th className="px-4 py-3 rounded-tl-xl text-muted-foreground">User</th>
-                                            <th className="px-4 py-3 text-muted-foreground">Role</th>
-                                            <th className="px-4 py-3 text-muted-foreground">Joined</th>
-                                            <th className="px-4 py-3 rounded-tr-xl text-center text-muted-foreground">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-border/50">
-                                        {loading ? (
+                            <div className="card-magical p-0 overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left">
+                                        <thead className="bg-secondary/30 border-b border-border">
                                             <tr>
-                                                <td colSpan={4} className="px-4 py-10 text-center">
-                                                    <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto mb-2" />
-                                                    Loading users...
-                                                </td>
+                                                <th className="px-6 py-4 font-semibold text-sm">Account</th>
+                                                <th className="px-6 py-4 font-semibold text-sm">Role</th>
+                                                <th className="px-6 py-4 font-semibold text-sm">Joined</th>
+                                                <th className="px-6 py-4 font-semibold text-sm text-center">Actions</th>
                                             </tr>
-                                        ) : profiles.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
-                                                    No users found.
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            profiles.map((profile) => (
-                                                <tr key={profile.id} className="hover:bg-primary/5 transition-colors">
-                                                    <td className="px-4 py-4">
-                                                        <div className="font-semibold">{profile.email}</div>
-                                                        <div className="text-[10px] text-muted-foreground font-mono">{profile.id}</div>
+                                        </thead>
+                                        <tbody className="divide-y divide-border/50">
+                                            {loading ? (
+                                                <tr>
+                                                    <td colSpan={4} className="px-6 py-12 text-center">
+                                                        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
                                                     </td>
-                                                    <td className="px-4 py-4">
+                                                </tr>
+                                            ) : profiles.map((p) => (
+                                                <tr key={p.id} className="hover:bg-primary/5 transition-colors group">
+                                                    <td className="px-6 py-5">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center font-bold text-primary">
+                                                                {p.email.charAt(0).toUpperCase()}
+                                                            </div>
+                                                            <div>
+                                                                <div className="font-bold">{p.email}</div>
+                                                                <div className="text-[10px] text-muted-foreground font-mono">{p.id}</div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-5">
                                                         <select
-                                                            value={profile.role}
-                                                            onChange={(e) => handleUpdateRole(profile.id, e.target.value as AppRole)}
-                                                            className="bg-background border border-border rounded-lg px-2 py-1 focus:ring-1 focus:ring-primary outline-none"
+                                                            value={p.role}
+                                                            onChange={(e) => handleUpdateRole(p.id, e.target.value as AppRole)}
+                                                            className="bg-background border-2 border-border rounded-xl px-3 py-1.5 focus:border-primary outline-none text-sm transition-all"
                                                         >
                                                             <option value="user">User</option>
                                                             <option value="moderator">Moderator</option>
                                                             <option value="admin">Admin</option>
                                                         </select>
                                                     </td>
-                                                    <td className="px-4 py-4 text-muted-foreground">
-                                                        {new Date(profile.created_at).toLocaleDateString()}
+                                                    <td className="px-6 py-5 text-sm text-muted-foreground">
+                                                        {new Date(p.created_at).toLocaleDateString()}
                                                     </td>
-                                                    <td className="px-4 py-4 text-center">
-                                                        <button className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors">
+                                                    <td className="px-6 py-5 text-center">
+                                                        <button className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all">
                                                             <Trash2 className="w-4 h-4" />
                                                         </button>
                                                     </td>
                                                 </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Settings Sidebar */}
-                    <div className="space-y-6">
-                        <div className="card-magical">
-                            <div className="flex items-center gap-2 mb-6">
-                                <SettingsIcon className="w-5 h-5 text-primary" />
-                                <h2 className="text-xl font-bold">App Settings</h2>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div className="p-4 rounded-xl border border-border bg-background/50">
-                                    <h3 className="font-semibold text-sm mb-1">Maintenance Mode</h3>
-                                    <p className="text-xs text-muted-foreground mb-3">Prevent users from generating books.</p>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" className="sr-only peer" />
-                                        <div className="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                                    </label>
-                                </div>
-
-                                <div className="p-4 rounded-xl border border-border bg-background/50">
-                                    <h3 className="font-semibold text-sm mb-1">Theme Visibility</h3>
-                                    <p className="text-xs text-muted-foreground mb-3">Manage which themes are active.</p>
-                                    <button className="text-xs font-bold text-primary hover:underline">Manage Themes →</button>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
+                    )}
 
-                        <div className="card-magical bg-primary/10 border-primary/20">
-                            <div className="flex items-center gap-2 mb-4">
-                                <Shield className="w-5 h-5 text-primary" />
-                                <h2 className="text-lg font-bold">System Status</h2>
+                    {/* SETTINGS TAB */}
+                    {activeTab === 'settings' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div className="card-magical space-y-6">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/30">
+                                        <Globe className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                                    </div>
+                                    <h3 className="font-bold text-lg">System Access</h3>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <div className="font-semibold text-sm">Maintenance Mode</div>
+                                            <div className="text-xs text-muted-foreground">Lock generation for updates.</div>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" className="sr-only peer" />
+                                            <div className="w-10 h-5 bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                                        </label>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <div className="font-semibold text-sm">Public Registrations</div>
+                                            <div className="text-xs text-muted-foreground">Allow new signups.</div>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" defaultChecked className="sr-only peer" />
+                                            <div className="w-10 h-5 bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="space-y-2 text-sm text-muted-foreground">
-                                <div className="flex justify-between">
-                                    <span>Users:</span>
-                                    <span className="font-bold text-foreground">{profiles.length}</span>
+
+                            <div className="card-magical space-y-6">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                                        <Bell className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                    </div>
+                                    <h3 className="font-bold text-lg">Notifications</h3>
                                 </div>
-                                <div className="flex justify-between">
-                                    <span>Supabase:</span>
-                                    <span className="font-bold text-success">Online</span>
+                                <div className="space-y-4 text-sm">
+                                    <div className="flex items-center justify-between">
+                                        <span>New User Alert</span>
+                                        <input type="checkbox" defaultChecked className="accent-primary" />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span>Generation Completion</span>
+                                        <input type="checkbox" className="accent-primary" />
+                                    </div>
                                 </div>
-                                <div className="flex justify-between">
-                                    <span>n8n Webhook:</span>
-                                    <span className="font-bold text-success">Healthy</span>
+                            </div>
+
+                            <div className="card-magical space-y-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-primary/10">
+                                        <Sparkles className="w-5 h-5 text-primary" />
+                                    </div>
+                                    <h3 className="font-bold text-lg">AI Parameters</h3>
+                                </div>
+                                <div className="p-4 rounded-xl bg-primary/5 text-primary text-xs font-semibold">
+                                    Advanced AI models and temperature settings coming in next update.
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    )}
+
+                    {/* MY PROFILE TAB (Within Admin) */}
+                    {activeTab === 'profile' && (
+                        <div className="max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-3 gap-8">
+
+                            {/* Profile Overview */}
+                            <div className="md:col-span-1 space-y-6">
+                                <div className="card-magical text-center py-10 relative overflow-hidden">
+                                    <div className="absolute top-0 inset-x-0 h-24 gradient-magic opacity-20" />
+                                    <div className="relative mb-4 inline-block">
+                                        <div className="w-24 h-24 rounded-full bg-background border-4 border-primary/20 flex items-center justify-center text-3xl shadow-float mx-auto">
+                                            {user?.email?.charAt(0).toUpperCase()}
+                                        </div>
+                                        <button className="absolute bottom-0 right-0 p-2 bg-primary text-white rounded-full shadow-lg hover:scale-110 transition-transform">
+                                            <Camera className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                    <h3 className="text-xl font-bold">{user?.email?.split('@')[0]}</h3>
+                                    <div className="inline-block mt-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest border border-primary/20">
+                                        Master Admin
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={signOut}
+                                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-destructive/20 text-destructive font-bold hover:bg-destructive/5 transition-all"
+                                >
+                                    <LogOut className="w-4 h-4" />
+                                    Logout Session
+                                </button>
+                            </div>
+
+                            {/* Security & Details */}
+                            <div className="md:col-span-2 space-y-6">
+                                <div className="card-magical space-y-6">
+                                    <h3 className="text-xl font-bold flex items-center gap-2">
+                                        <Shield className="w-5 h-5 text-primary" />
+                                        Security Settings
+                                    </h3>
+
+                                    <div className="space-y-4">
+                                        <div className="p-4 rounded-2xl bg-secondary/20 space-y-1">
+                                            <div className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Email Address</div>
+                                            <div className="font-semibold flex items-center gap-2">
+                                                <Mail className="w-4 h-4 text-primary" />
+                                                {user?.email}
+                                            </div>
+                                        </div>
+
+                                        <div className="p-6 border-2 border-border/50 rounded-2xl space-y-4">
+                                            <div>
+                                                <h4 className="font-bold flex items-center gap-2">
+                                                    <Key className="w-4 h-4 text-orange-500" />
+                                                    Update Password
+                                                </h4>
+                                                <p className="text-sm text-muted-foreground mt-1">We will send a high-security reset link to your primary email address.</p>
+                                            </div>
+                                            <button
+                                                onClick={handlePasswordReset}
+                                                className="btn-magic w-full py-3"
+                                            >
+                                                Send Reset link
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="card-magical bg-primary/5 border-primary/20">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="font-bold">Account Stats</h3>
+                                        <Sparkles className="w-5 h-5 text-primary" />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="text-center p-4 rounded-xl bg-background shadow-sm">
+                                            <div className="text-2xl font-black">Admin</div>
+                                            <div className="text-[10px] text-muted-foreground uppercase">Role Level</div>
+                                        </div>
+                                        <div className="text-center p-4 rounded-xl bg-background shadow-sm">
+                                            <div className="text-2xl font-black">Enabled</div>
+                                            <div className="text-[10px] text-muted-foreground uppercase">Status</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
-            {/* Add User Modal */}
+            {/* Invite Modal */}
             {isAddingUser && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-                    <div className="card-magical w-full max-w-md animate-scale-in">
-                        <h2 className="text-2xl font-bold mb-6">Invite New User</h2>
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                    <div className="card-magical w-full max-w-md animate-scale-in border-primary/20">
+                        <h2 className="text-2xl font-bold mb-2">Invite New Controller</h2>
+                        <p className="text-sm text-muted-foreground mb-6">Grant administrative or standard access to the platform.</p>
                         <form onSubmit={handleCreateUser} className="space-y-4">
                             <div className="space-y-2">
-                                <label className="text-sm font-semibold">Email Address</label>
+                                <label className="text-sm font-bold">Primary Email</label>
                                 <input
                                     type="email"
                                     required
                                     value={newUser.email}
                                     onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                                    className="w-full px-4 py-2 rounded-xl border-2 border-border focus:border-primary outline-none transition-all"
-                                    placeholder="name@email.com"
+                                    className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary outline-none transition-all"
+                                    placeholder="admin@wonderwraps.com"
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-sm font-semibold">Temporary Password</label>
+                                <label className="text-sm font-bold">Secure Password</label>
                                 <input
                                     type="password"
                                     required
-                                    minLength={6}
+                                    minLength={8}
                                     value={newUser.password}
                                     onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                                    className="w-full px-4 py-2 rounded-xl border-2 border-border focus:border-primary outline-none transition-all"
-                                    placeholder="••••••••"
+                                    className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary outline-none transition-all"
+                                    placeholder="At least 8 characters"
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-sm font-semibold">Initial Role</label>
+                                <label className="text-sm font-bold">Assign Role</label>
                                 <select
                                     value={newUser.role}
                                     onChange={(e) => setNewUser({ ...newUser, role: e.target.value as AppRole })}
-                                    className="w-full px-4 py-2 rounded-xl border-2 border-border focus:border-primary outline-none"
+                                    className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary outline-none font-semibold"
                                 >
-                                    <option value="user">User</option>
+                                    <option value="user">Standard User</option>
                                     <option value="moderator">Moderator</option>
-                                    <option value="admin">Admin</option>
+                                    <option value="admin">Platform Admin</option>
                                 </select>
                             </div>
-                            <div className="flex gap-3 mt-8">
+                            <div className="flex gap-4 pt-6">
                                 <button
                                     type="button"
                                     onClick={() => setIsAddingUser(false)}
-                                    className="flex-1 px-4 py-3 rounded-xl border-2 border-border font-semibold hover:bg-secondary/30 transition-all"
+                                    className="flex-1 py-3 rounded-xl border-2 border-border font-bold hover:bg-secondary transition-all"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
-                                    className="flex-1 btn-magic"
+                                    className="flex-1 btn-magic py-3"
                                 >
-                                    Create User
+                                    Confirm Invite
                                 </button>
                             </div>
                         </form>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { BookOpen, Mail, Lock, User, Sparkles, Star } from 'lucide-react';
+import { BookOpen, Mail, Lock, User, Sparkles, Star, Eye, EyeOff } from 'lucide-react';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { Checkbox } from '@/components/ui/checkbox';
 
@@ -11,6 +11,7 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const navigate = useNavigate();
 
@@ -140,15 +141,25 @@ export default function Auth() {
                 <Lock className="w-4 h-4 text-primary/70" />
                 Password
               </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                minLength={6}
-                className="w-full px-5 py-3.5 rounded-2xl border-2 border-border/50 bg-background/50 text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 transition-all duration-300"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  minLength={6}
+                  className="w-full px-5 py-3.5 rounded-2xl border-2 border-border/50 bg-background/50 text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 transition-all duration-300 pr-12"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 p-1.5 text-muted-foreground hover:text-primary transition-colors hover:bg-primary/10 rounded-xl"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
             </div>
 
             {isLogin && (

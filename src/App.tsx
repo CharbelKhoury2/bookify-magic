@@ -3,14 +3,13 @@ import { BookGenerator } from './components/BookGenerator';
 import { HistoryPanel } from './components/HistoryPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useAuth } from './hooks/useAuth';
-import { BookOpen, User as UserIcon, LogOut, Settings, ShieldCheck } from 'lucide-react';
+import { BookOpen, User, LogOut, ShieldCheck } from 'lucide-react';
 import Auth from './pages/Auth';
+import Admin from './pages/Admin';
 import { ThemeProvider } from './components/ThemeProvider';
 import { DarkModeToggle } from './components/DarkModeToggle';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
-import Admin from './pages/Admin';
-import Profile from './pages/Profile';
 
 function HomePage() {
   const { user, loading, signOut, isAdmin } = useAuth();
@@ -23,30 +22,26 @@ function HomePage() {
           <div className="flex justify-end mb-4">
             <div className="flex items-center gap-3">
               <DarkModeToggle />
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 border-2 border-border/50 rounded-2xl p-1 bg-card/50 backdrop-blur-sm shadow-sm">
                 {isAdmin && (
                   <Link
                     to="/admin"
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all font-semibold"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:shadow-glow transition-all font-bold text-sm"
                   >
-                    <Settings className="w-4 h-4" />
-                    Admin
+                    <ShieldCheck className="w-4 h-4" />
+                    Admin Admin
                   </Link>
                 )}
-                <Link
-                  to="/profile"
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors font-medium"
-                >
-                  <UserIcon className="w-4 h-4" />
-                  <span className="hidden sm:inline">Profile</span>
-                </Link>
+                <span className="text-sm font-semibold text-muted-foreground px-4 hidden sm:block">
+                  {user?.email}
+                </span>
                 <button
                   onClick={signOut}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-border text-muted-foreground hover:border-destructive hover:text-destructive transition-colors group"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-transparent hover:border-destructive/20 text-muted-foreground hover:text-destructive transition-all group"
                   title="Sign Out"
                 >
                   <LogOut className="w-4 h-4 transition-transform group-hover:scale-110" />
-                  <span className="hidden sm:inline font-medium">Sign Out</span>
+                  <span className="hidden lg:inline font-bold text-sm">Sign Out</span>
                 </button>
               </div>
             </div>
@@ -83,7 +78,6 @@ function HomePage() {
   );
 }
 
-
 function App() {
   const { user, loading, isAdmin } = useAuth();
 
@@ -104,7 +98,6 @@ function App() {
         <Routes>
           <Route path="/" element={user ? <HomePage /> : <Auth />} />
           <Route path="/auth" element={user ? <HomePage /> : <Auth />} />
-          <Route path="/profile" element={user ? <Profile /> : <Auth />} />
           <Route
             path="/admin"
             element={user && isAdmin ? <Admin /> : <HomePage />}

@@ -431,7 +431,7 @@ export default function Admin() {
                                     value={newUser.email}
                                     onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
                                     className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary outline-none transition-all"
-                                    placeholder="admin@wonderwraps.com"
+                                    placeholder="admin@magicbookify.com"
                                 />
                             </div>
                             <div className="space-y-2">

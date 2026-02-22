@@ -1,4 +1,4 @@
-# Welcome to your Lovable project
+# Magic Bookify | Personalized Children's Book Generator
 
 ## Project info
 

@@ -1,6 +1,6 @@
 {
-    "name": "WonderWraps Magic | Personalized Children's Books",
-    "short_name": "WonderWraps",
+    "name": "Magic Bookify | Personalized Children's Books",
+    "short_name": "Magic Bookify",
     "description": "Create magical, personalized storybooks for your child in seconds!",
     "start_url": "/",
     "display": "standalone",
@@ -8,12 +8,12 @@
     "theme_color": "#9b87f5",
     "icons": [
         {
-            "src": "https://wonderwraps-magic.vercel.app/og-image.png",
+            "src": "/og-image.png",
             "sizes": "192x192",
             "type": "image/png"
         },
         {
-            "src": "https://wonderwraps-magic.vercel.app/og-image.png",
+            "src": "/og-image.png",
             "sizes": "512x512",
             "type": "image/png"
         }

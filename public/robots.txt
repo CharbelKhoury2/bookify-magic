@@ -1,4 +1,4 @@
-# Professional standards robots.txt for WonderWraps Magic
+# Professional standards robots.txt for Magic Bookify
 User-agent: *
 Allow: /
 Disallow: /admin

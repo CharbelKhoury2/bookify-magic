@@ -1,14 +1,8 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
-
+# Professional standards robots.txt for WonderWraps Magic
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /profile
+Disallow: /api/
+
+Sitemap: https://wonderwraps-magic.vercel.app/sitemap.xml

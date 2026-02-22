@@ -73,6 +73,7 @@ export const HistoryPanel: React.FC = () => {
               ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:bg-secondary/50'
               }`}
+            aria-label={`Show ${history.length} active books in library`}
           >
             <Clock className="w-3.5 h-3.5" />
             Recent
@@ -87,6 +88,7 @@ export const HistoryPanel: React.FC = () => {
               ? 'bg-destructive/80 text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:bg-secondary/50'
               }`}
+            aria-label={`Show ${deletedHistory.length} deleted books in trash`}
           >
             <Trash2 className="w-3.5 h-3.5" />
             Trash

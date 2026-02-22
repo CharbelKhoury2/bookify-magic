@@ -35,11 +35,13 @@ const ThemeCard: React.FC<ThemeCardProps> = ({ theme, isSelected, onClick }) => 
   return (
     <button
       onClick={onClick}
+      aria-pressed={isSelected}
+      aria-label={`Select ${theme.name} theme: ${theme.description}`}
       className={`
         relative p-4 rounded-2xl border-2 transition-all duration-300
         hover:scale-105 hover:shadow-float
-        ${isSelected 
-          ? 'border-primary bg-primary/10 shadow-glow' 
+        ${isSelected
+          ? 'border-primary bg-primary/10 shadow-glow'
           : 'border-border bg-card hover:border-primary/50'
         }
       `}

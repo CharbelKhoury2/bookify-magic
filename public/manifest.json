@@ -1,0 +1,21 @@
+{
+    "name": "WonderWraps Magic | Personalized Children's Books",
+    "short_name": "WonderWraps",
+    "description": "Create magical, personalized storybooks for your child in seconds!",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#9b87f5",
+    "icons": [
+        {
+            "src": "https://wonderwraps-magic.vercel.app/og-image.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "https://wonderwraps-magic.vercel.app/og-image.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}

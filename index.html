@@ -1,28 +1,63 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-     <title>Personalized Children's Book Generator</title>
-     <meta name="description" content="Create personalized children's books with custom photos and names. Generate beautiful, print-ready storybooks in seconds!" />
-     <meta name="author" content="WonderWraps" />
-     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>" />
 
-     <meta property="og:title" content="Personalized Children's Book Generator" />
-     <meta property="og:description" content="Create personalized children's books with custom photos and names. Generate beautiful, print-ready storybooks in seconds!" />
-    <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#9b87f5" />
+  <title>Personalized Children's Book Generator | WonderWraps Magic</title>
+  <meta name="description"
+    content="Transform your child into the hero of their own story! Create personalized, AI-powered children's books with custom photos and names. 📚✨" />
+  <meta name="keywords"
+    content="personalized children's books, custom storybooks, children's gift, AI book generator, personal story for child" />
+  <meta name="author" content="WonderWraps" />
+  <link rel="canonical" href="https://wonderwraps-magic.vercel.app" />
+  <link rel="icon" href="https://wonderwraps-magic.vercel.app/favicon.ico" />
+  <link rel="manifest" href="/manifest.json" />
 
-    <meta name="twitter:card" content="summary_large_image" />
-     <meta name="twitter:site" content="@WonderWraps" />
-    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://wonderwraps-magic.vercel.app/" />
+  <meta property="og:title" content="Personalized Children's Book Generator | WonderWraps" />
+  <meta property="og:description"
+    content="Make your child the star of a magical adventure. High-quality, personalized storybooks generated in seconds!" />
+  <meta property="og:image" content="https://wonderwraps-magic.vercel.app/og-image.png" />
 
-    <!-- Load Poppins font from Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  </head>
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image" />
+  <meta property="twitter:url" content="https://wonderwraps-magic.vercel.app/" />
+  <meta property="twitter:title" content="Personalized Children's Book Generator | WonderWraps" />
+  <meta property="twitter:description"
+    content="Make your child the star of a magical adventure. High-quality, personalized storybooks generated in seconds!" />
+  <meta property="twitter:image" content="https://wonderwraps-magic.vercel.app/og-image.png" />
 
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+  <!-- Load Poppins font from Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+</head>
+
+<body>
+  <div id="root">
+    <div
+      style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(135deg, #fdfcfb 0%, #e2d1c3 100%); font-family: 'Poppins', sans-serif;">
+      <div
+        style="width: 50px; height: 50px; border: 4px solid rgba(155, 135, 245, 0.2); border-top: 4px solid #9b87f5; border-radius: 50%; animation: spin 1s linear infinite;">
+      </div>
+      <p style="margin-top: 15px; color: #9b87f5; font-weight: 500;">Loading Magic...</p>
+      <style>
+        @keyframes spin {
+          0% {
+            transform: rotate(0deg);
+          }
+
+          100% {
+            transform: rotate(360deg);
+          }
+        }
+      </style>
+    </div>
+  </div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
 </html>

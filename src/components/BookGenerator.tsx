@@ -11,6 +11,7 @@ import { useHistoryStore } from '../store/historyStore';
 import { validateBookData } from '../utils/validators';
 import { downloadPDF, sanitizeFileName } from '../utils/pdfGenerator';
 import { startGenerationViaWebhook, logGenerationStart, updateGenerationStatus } from '../utils/webhookClient';
+import { safeOpen } from '../utils/security';
 
 export const BookGenerator: React.FC = () => {
   const {
@@ -189,7 +190,7 @@ export const BookGenerator: React.FC = () => {
       downloadPDF(generatedBlob, fileName);
       showToast('Download started!', 'success');
     } else if (generatedPDF) {
-      window.open(generatedPDF, '_blank');
+      safeOpen(generatedPDF);
     }
   };
 
@@ -288,7 +289,7 @@ export const BookGenerator: React.FC = () => {
           onClose={() => setShowFinished(false)}
           onView={() => {
             if (generatedPDF) {
-              window.open(generatedPDF, '_blank');
+              safeOpen(generatedPDF);
             }
           }}
         />

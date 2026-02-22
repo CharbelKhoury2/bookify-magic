@@ -3,6 +3,7 @@ import { FileText, Download, Image, Maximize2 } from 'lucide-react';
 import { useBookStore } from '../store/bookStore';
 import { LoadingSpinner } from './LoadingSpinner';
 import { ImageModal } from './ImageModal';
+import { safeOpen } from '../utils/security';
 
 interface PDFPreviewProps {
   onDownload: () => void;
@@ -26,11 +27,11 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
     if (coverDownloadUrl) {
       console.log('📥 Downloading cover from URL:', coverDownloadUrl);
       // Open the cover download URL in a new tab
-      window.open(coverDownloadUrl, '_blank');
+      safeOpen(coverDownloadUrl);
     } else if (coverImage) {
       console.log('📥 Downloading cover from preview URL:', coverImage);
       // Fallback to the preview image if no download URL
-      window.open(coverImage, '_blank');
+      safeOpen(coverImage);
     }
   };
 
@@ -38,7 +39,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
     if (pdfDownloadUrl) {
       console.log('📥 Downloading PDF from URL:', pdfDownloadUrl);
       // Open the PDF download URL in a new tab
-      window.open(pdfDownloadUrl, '_blank');
+      safeOpen(pdfDownloadUrl);
     } else {
       console.log('📥 Downloading PDF using fallback handler');
       // Fallback to the original download handler

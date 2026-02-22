@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Download, Maximize2 } from 'lucide-react';
+import { safeOpen } from '../utils/security';
 import { Dialog, DialogContent, DialogOverlay, DialogTitle } from './ui/dialog';
 
 interface ImageModalProps {
@@ -41,7 +42,7 @@ export const ImageModal: React.FC<ImageModalProps> = ({ isOpen, onClose, imageUr
                     {/* Download button overlay */}
                     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                         <button
-                            onClick={() => window.open(imageUrl, '_blank')}
+                            onClick={() => safeOpen(imageUrl)}
                             className="btn-magic flex items-center gap-2 shadow-2xl"
                         >
                             <Download className="w-5 h-5" />

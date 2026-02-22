@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Download, FileText, Image } from 'lucide-react';
 import { Dialog, DialogContent, DialogOverlay, DialogTitle } from './ui/dialog';
 import { HistoryItem } from '../utils/types';
+import { safeOpen } from '../utils/security';
 
 interface BookViewerModalProps {
     isOpen: boolean;
@@ -34,7 +35,7 @@ export const BookViewerModal: React.FC<BookViewerModalProps> = ({ isOpen, onClos
 
                     <div className="flex items-center gap-3">
                         <button
-                            onClick={() => window.open(book.pdfDownloadUrl || book.pdfUrl, '_blank')}
+                            onClick={() => safeOpen(book.pdfDownloadUrl || book.pdfUrl)}
                             className="hidden sm:flex btn-magic px-4 py-2 text-sm items-center gap-2"
                         >
                             <Download className="w-4 h-4" />
@@ -66,7 +67,7 @@ export const BookViewerModal: React.FC<BookViewerModalProps> = ({ isOpen, onClos
                                     className="w-full h-full object-cover rounded-xl"
                                 />
                                 <button
-                                    onClick={() => window.open(book.coverDownloadUrl || book.thumbnailUrl, '_blank')}
+                                    onClick={() => safeOpen(book.coverDownloadUrl || book.thumbnailUrl)}
                                     className="absolute bottom-4 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 text-primary p-2 rounded-lg shadow-lg hover:scale-105 border border-border/50"
                                     title="Download Cover"
                                 >
@@ -99,7 +100,7 @@ export const BookViewerModal: React.FC<BookViewerModalProps> = ({ isOpen, onClos
                         {/* Mobile Download Button */}
                         <div className="sm:hidden absolute bottom-4 right-4">
                             <button
-                                onClick={() => window.open(book.pdfDownloadUrl || book.pdfUrl, '_blank')}
+                                onClick={() => safeOpen(book.pdfDownloadUrl || book.pdfUrl)}
                                 className="btn-magic w-12 h-12 rounded-full p-0 flex items-center justify-center shadow-2xl"
                             >
                                 <Download className="w-5 h-5" />

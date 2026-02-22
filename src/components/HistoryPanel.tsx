@@ -16,6 +16,7 @@ import {
   AlertDialogTitle,
 } from "./ui/alert-dialog";
 import { useToast } from '../hooks/use-toast';
+import { safeOpen } from '../utils/security';
 
 export const HistoryPanel: React.FC = () => {
   const {
@@ -277,7 +278,7 @@ const HistoryCard: React.FC<HistoryCardProps> = ({ item, onRemove, onRestore, on
   const handleDownloadPDF = () => {
     const url = item.pdfDownloadUrl || item.pdfUrl;
     if (url) {
-      window.open(url, '_blank');
+      safeOpen(url);
       console.log('📥 Downloading PDF from history:', url);
     }
   };
@@ -285,7 +286,7 @@ const HistoryCard: React.FC<HistoryCardProps> = ({ item, onRemove, onRestore, on
   const handleDownloadCover = () => {
     const url = item.coverDownloadUrl || item.thumbnailUrl;
     if (url) {
-      window.open(url, '_blank');
+      safeOpen(url);
       console.log('📥 Downloading cover from history:', url);
     }
   };

@@ -69,3 +69,13 @@ export interface BookGeneration {
   status: 'pending' | 'completed' | 'failed';
   created_at: string;
 }
+
+export type AppRole = 'admin' | 'moderator' | 'user';
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  role: AppRole;
+  created_at: string;
+  last_sign_in?: string;
+}

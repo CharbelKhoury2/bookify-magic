@@ -6,6 +6,8 @@ const ALLOWED_DOMAIN_SUFFIXES = [
     'supabase.co',
     'vercel.app',
     'lovable.dev',
+    'n8n.cloud',
+    'google.com',
 ];
 
 /**
@@ -22,6 +24,11 @@ export function isSafeUrl(url: string | null | undefined): boolean {
 
     // Allow blob URLs (used for PDF previews)
     if (url.startsWith('blob:')) {
+        return true;
+    }
+
+    // Allow data URLs for images (Base64)
+    if (url.startsWith('data:image/')) {
         return true;
     }
 
@@ -42,7 +49,8 @@ export function isSafeUrl(url: string | null | undefined): boolean {
  */
 export function safeOpen(url: string | null | undefined, target: string = '_blank') {
     if (isSafeUrl(url)) {
-        window.open(url!, target);
+        // Use noopener,noreferrer for security on all platform links
+        window.open(url!, target, 'noopener,noreferrer');
     } else {
         console.warn('Blocked opening potentially unsafe URL:', url);
     }

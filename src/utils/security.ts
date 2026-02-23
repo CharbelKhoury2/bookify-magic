@@ -6,6 +6,9 @@ const ALLOWED_DOMAIN_SUFFIXES = [
     'supabase.co',
     'vercel.app',
     'lovable.dev',
+    'google.com',
+    'googleusercontent.com',
+    'n8n.cloud',
 ];
 
 /**

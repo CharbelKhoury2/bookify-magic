@@ -89,18 +89,45 @@ export async function startGenerationViaWebhook(
     photoMime: photoFile.type || 'image/jpeg',
   };
 
-  console.log('🚀 Sending book request via edge function');
+  const N8N_WEBHOOK_URL = "https://wonderwrapslb.app.n8n.cloud/webhook-test/2b7a5bec-96be-4571-8c7c-aaec8d0934fc";
 
-  const { data, error } = await supabase.functions.invoke('generate-book', {
-    body: payload,
-  });
+  console.log('🚀 Sending book request directly to n8n cloud');
 
-  if (error) {
-    console.error('❌ Edge function error:', error);
-    throw new Error(error.message || 'Book generation service error');
+  let data: any;
+
+  try {
+    // Primary: Call n8n webhook directly
+    const response = await fetch(N8N_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      console.error(`❌ n8n direct call failed (${response.status}):`, errorText);
+      throw new Error(`n8n returned status ${response.status}`);
+    }
+
+    data = await response.json();
+    console.log('📦 Received response directly from n8n:', data);
+  } catch (directError) {
+    console.warn('⚠️ Direct n8n call failed, falling back to edge function...', directError);
+
+    // Fallback: Try through Supabase Edge Function
+    const { data: edgeData, error } = await supabase.functions.invoke('generate-book', {
+      body: payload,
+    });
+
+    if (error) {
+      console.error('❌ Edge function fallback also failed:', error);
+      throw new Error(error.message || 'Book generation service error');
+    }
+
+    data = edgeData;
+    console.log('📦 Received response from edge function fallback:', data);
   }
 
-  console.log('📦 Received response from edge function:', data);
   const start: GenerationStartResponse = data;
 
   // If direct PDF binary response

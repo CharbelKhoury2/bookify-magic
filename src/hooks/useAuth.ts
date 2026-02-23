@@ -29,16 +29,23 @@ export function useAuth() {
   };
 
   useEffect(() => {
+    // Safety timeout: If auth takes more than 5 seconds, stop loading anyway
+    const safetyTimeout = setTimeout(() => {
+      setLoading(false);
+      console.warn('Auth loading timed out. Proceeding with caution...');
+    }, 5000);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          await fetchRole(session.user.id);
+          fetchRole(session.user.id); // Don't await here to avoid blocking UI
         } else {
           setRole(null);
         }
         setLoading(false);
+        clearTimeout(safetyTimeout);
       }
     );
 
@@ -46,12 +53,20 @@ export function useAuth() {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        await fetchRole(session.user.id);
+        fetchRole(session.user.id); // Don't await here to avoid blocking UI
       }
       setLoading(false);
+      clearTimeout(safetyTimeout);
+    }).catch(err => {
+      console.error('Session check failed:', err);
+      setLoading(false);
+      clearTimeout(safetyTimeout);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(safetyTimeout);
+    };
   }, []);
 
   const signOut = async () => {

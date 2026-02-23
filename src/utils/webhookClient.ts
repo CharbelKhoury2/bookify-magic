@@ -142,6 +142,16 @@ export async function startGenerationViaWebhook(
 
   if (items && Array.isArray(items)) {
     console.log('📦 Processing items from response:', items.length);
+    console.log('📦 Raw items:', JSON.stringify(items.map((i: any) => ({
+      name: i.name,
+      mimeType: i.mimeType,
+      id: i.id,
+      hasThumbnail: i.hasThumbnail,
+      thumbnailLink: i.thumbnailLink,
+      webViewLink: i.webViewLink,
+      webContentLink: i.webContentLink,
+      shared: i.shared
+    })), null, 2));
 
     const pdfItem = items.find((item: any) =>
       (item.mimeType === 'application/pdf') ||
@@ -157,8 +167,12 @@ export async function startGenerationViaWebhook(
       (item.name?.toLowerCase().includes('thumb'))
     );
 
+    console.log('🖼️ Cover item found:', coverItem ? { name: coverItem.name, mimeType: coverItem.mimeType, id: coverItem.id, thumbnailLink: coverItem.thumbnailLink, shared: coverItem.shared } : 'NONE');
+
     const pdfData = extractFileData(pdfItem || (pdfItem === undefined ? items.find((i: any) => extractFileData(i).url || extractFileData(i).base64) : null));
     const coverData = extractFileData(coverItem);
+
+    console.log('🖼️ Cover data extracted:', JSON.stringify(coverData));
 
     if (pdfData.url || pdfData.base64 || pdfData.blob) {
       console.log('🎉 Successfully extracted final data from items');
@@ -169,19 +183,46 @@ export async function startGenerationViaWebhook(
         pdfBlob = base64ToBlob(pdfData.base64, 'application/pdf');
       }
 
+      // Determine best cover image URL with multiple fallback strategies
+      let coverImageUrl = coverData.previewUrl || coverData.url;
+
+      if (!coverImageUrl && coverData.base64) {
+        coverImageUrl = `data:image/jpeg;base64,${coverData.base64.replace(/^data:image\/[a-z]+;base64,/, '')}`;
+      }
+
+      // If we have a Google Drive cover item, try multiple URL strategies
+      if (coverItem?.id && coverItem?.kind === 'drive#file') {
+        const driveId = coverItem.id;
+        // Strategy priority for Google Drive images:
+        // 1. Signed thumbnail link from API (best but may expire)
+        // 2. Direct export URL
+        // 3. Thumbnail endpoint (requires public sharing)
+        const candidateUrls = [
+          coverItem.thumbnailLink?.replace(/=s\d+$/, '=s1000'),
+          `https://drive.google.com/thumbnail?id=${driveId}&sz=w1000`,
+          `https://lh3.googleusercontent.com/d/${driveId}=s1000`,
+          coverItem.webContentLink,
+        ].filter(Boolean);
+
+        console.log('🖼️ Cover image URL candidates:', candidateUrls);
+        coverImageUrl = candidateUrls[0] || coverImageUrl;
+      }
+
       const result = {
         pdfUrl: pdfData.previewUrl || pdfData.url,
         pdfBlob: pdfBlob,
-        coverImageUrl: coverData.previewUrl || coverData.url || (coverData.base64 ? `data:image/jpeg;base64,${coverData.base64.replace(/^data:image\/[a-z]+;base64,/, '')}` : undefined),
+        coverImageUrl,
         pdfDownloadUrl: pdfData.downloadUrl || pdfData.url,
         coverDownloadUrl: coverData.downloadUrl || coverData.url
       };
 
-      console.log('✨ Extracted file data:', {
+      console.log('✨ Final extracted file data:', {
         hasPdf: !!result.pdfUrl || !!result.pdfBlob,
         hasCover: !!result.coverImageUrl,
-        pdfUrl: result.pdfUrl?.substring(0, 50) + '...',
-        coverUrl: result.coverImageUrl?.substring(0, 50) + '...'
+        pdfUrl: result.pdfUrl?.substring(0, 80),
+        coverUrl: result.coverImageUrl?.substring(0, 120),
+        pdfDownloadUrl: result.pdfDownloadUrl?.substring(0, 80),
+        coverDownloadUrl: result.coverDownloadUrl?.substring(0, 80)
       });
 
       return result;

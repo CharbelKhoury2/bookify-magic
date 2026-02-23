@@ -21,6 +21,52 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
   } = useBookStore();
 
   const [isImageModalOpen, setIsImageModalOpen] = React.useState(false);
+  const [coverRetryCount, setCoverRetryCount] = React.useState(0);
+  const [effectiveCoverUrl, setEffectiveCoverUrl] = React.useState<string | null>(null);
+
+  // Reset retry count when coverImage changes
+  React.useEffect(() => {
+    setEffectiveCoverUrl(coverImage);
+    setCoverRetryCount(0);
+    if (coverImage) {
+      console.log('🖼️ PDFPreview: Cover image URL set to:', coverImage);
+    }
+  }, [coverImage]);
+
+  // Handle image load errors by trying fallback URLs
+  const handleCoverImageError = () => {
+    console.warn(`🖼️ Cover image failed to load (attempt ${coverRetryCount + 1}):`, effectiveCoverUrl);
+
+    // Extract Google Drive file ID from the URL
+    let driveId: string | null = null;
+    if (effectiveCoverUrl) {
+      const idMatch = effectiveCoverUrl.match(/(?:id=|\/d\/)([a-zA-Z0-9_-]+)/);
+      if (idMatch) driveId = idMatch[1];
+      // Also try to extract from lh3 thumbnail links
+      if (!driveId && effectiveCoverUrl.includes('lh3.googleusercontent.com')) {
+        // Try to get file ID from the store or original cover URL
+        const origMatch = coverImage?.match(/(?:id=|\/d\/)([a-zA-Z0-9_-]+)/);
+        if (origMatch) driveId = origMatch[1];
+      }
+    }
+
+    const fallbacks = [
+      driveId ? `https://drive.google.com/thumbnail?id=${driveId}&sz=w1000` : null,
+      driveId ? `https://lh3.googleusercontent.com/d/${driveId}=s1000` : null,
+      driveId ? `https://drive.google.com/uc?id=${driveId}&export=view` : null,
+      driveId ? `https://drive.google.com/uc?id=${driveId}&export=download` : null,
+    ].filter(Boolean) as string[];
+
+    if (coverRetryCount < fallbacks.length) {
+      const nextUrl = fallbacks[coverRetryCount];
+      console.log(`🖼️ Trying fallback cover URL #${coverRetryCount + 1}:`, nextUrl);
+      setEffectiveCoverUrl(nextUrl);
+      setCoverRetryCount(prev => prev + 1);
+    } else {
+      console.error('🖼️ All cover image fallbacks exhausted');
+      setEffectiveCoverUrl(null); // Give up, hide the broken image
+    }
+  };
 
   const handleDownloadCover = () => {
     if (coverDownloadUrl) {
@@ -123,7 +169,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center relative z-10">
-            {coverImage && (
+            {effectiveCoverUrl && (
               <div className="md:col-span-5 lg:col-span-4">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -141,9 +187,11 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
                     onClick={() => setIsImageModalOpen(true)}
                   >
                     <img
-                      src={coverImage}
+                      src={effectiveCoverUrl}
                       alt="Book Cover"
                       className="w-full h-full object-cover"
+                      onError={handleCoverImageError}
+                      referrerPolicy="no-referrer"
                     />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center">
                       <Maximize2 className="w-10 h-10 text-white opacity-0 group-hover:opacity-100 transform scale-50 group-hover:scale-100 transition-all duration-300 drop-shadow-md" />
@@ -153,7 +201,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
               </div>
             )}
 
-            <div className={coverImage ? "md:col-span-7 lg:col-span-8" : "md:col-span-12"}>
+            <div className={effectiveCoverUrl ? "md:col-span-7 lg:col-span-8" : "md:col-span-12"}>
               <div className="space-y-3">
                 <p className="text-xs font-bold text-primary uppercase tracking-widest text-center md:text-left">Story Preview</p>
                 <div className="book-frame group mx-auto cursor-default">
@@ -184,7 +232,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
         <ImageModal
           isOpen={isImageModalOpen}
           onClose={() => setIsImageModalOpen(false)}
-          imageUrl={coverImage || ''}
+          imageUrl={effectiveCoverUrl || ''}
           title={`${childName}'s Magical Adventure`}
         />
       </>

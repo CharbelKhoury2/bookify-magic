@@ -1,30 +1,23 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { BookOpen, Mail, Lock, User, Sparkles, Star, Eye, EyeOff } from 'lucide-react';
+import { BookOpen, Mail, Lock, User, Sparkles, Star, Eye, EyeOff, UserCircle } from 'lucide-react';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { Checkbox } from '@/components/ui/checkbox';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const navigate = useNavigate();
 
-  // Load saved credentials on mount
-  React.useEffect(() => {
-    const savedEmail = localStorage.getItem('magic_remember_email');
-    const savedRemember = localStorage.getItem('magic_remember_me') === 'true';
 
-    if (savedRemember && savedEmail) {
-      setEmail(savedEmail);
-      setRememberMe(true);
-    }
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,28 +31,29 @@ export default function Auth() {
           password,
         });
         if (error) throw error;
-
-        // Handle "Remember Me"
-        if (rememberMe) {
-          localStorage.setItem('magic_remember_email', email);
-          localStorage.setItem('magic_remember_me', 'true');
-        } else {
-          localStorage.removeItem('magic_remember_email');
-          localStorage.setItem('magic_remember_me', 'false');
-        }
-
         navigate('/');
       } else {
+        // Validation for standard sign up
+        if (password !== confirmPassword) {
+          throw new Error('Passwords do not match');
+        }
+        if (!acceptTerms) {
+          throw new Error('You must accept the terms and conditions');
+        }
+
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             emailRedirectTo: window.location.origin,
+            data: {
+              full_name: fullName,
+            }
           },
         });
         if (error) throw error;
         setMessage({
-          text: 'Check your email to confirm your account!',
+          text: 'Registration successful! Check your email to confirm your account.',
           type: 'success',
         });
       }
@@ -121,6 +115,23 @@ export default function Auth() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            {!isLogin && (
+              <div className="space-y-2 animate-fade-in">
+                <label className="text-sm font-semibold text-foreground/80 flex items-center gap-2 ml-1">
+                  <UserCircle className="w-4 h-4 text-primary/70" />
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="John Doe"
+                  required={!isLogin}
+                  className="w-full px-5 py-3.5 rounded-2xl border-2 border-border/50 bg-background/50 text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 transition-all duration-300"
+                />
+              </div>
+            )}
+
             <div className="space-y-2">
               <label className="text-sm font-semibold text-foreground/80 flex items-center gap-2 ml-1">
                 <Mail className="w-4 h-4 text-primary/70" />
@@ -139,7 +150,7 @@ export default function Auth() {
             <div className="space-y-2">
               <label className="text-sm font-semibold text-foreground/80 flex items-center gap-2 ml-1">
                 <Lock className="w-4 h-4 text-primary/70" />
-                Password
+                {isLogin ? 'Password' : 'Create Password'}
               </label>
               <div className="relative">
                 <input
@@ -162,22 +173,41 @@ export default function Auth() {
               </div>
             </div>
 
-            {isLogin && (
-              <div className="flex items-center space-x-2 ml-1">
+            {!isLogin && (
+              <div className="space-y-2 animate-fade-in">
+                <label className="text-sm font-semibold text-foreground/80 flex items-center gap-2 ml-1">
+                  <Lock className="w-4 h-4 text-primary/70" />
+                  Confirm Password
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required={!isLogin}
+                  className="w-full px-5 py-3.5 rounded-2xl border-2 border-border/50 bg-background/50 text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 transition-all duration-300"
+                />
+              </div>
+            )}
+
+            {!isLogin && (
+              <div className="flex items-start space-x-3 ml-1 animate-fade-in">
                 <Checkbox
-                  id="remember"
-                  checked={rememberMe}
-                  onCheckedChange={(checked) => setRememberMe(checked as boolean)}
-                  className="border-primary/50 data-[state=checked]:bg-primary"
+                  id="terms"
+                  checked={acceptTerms}
+                  onCheckedChange={(checked) => setAcceptTerms(checked as boolean)}
+                  className="mt-1 border-primary/50 data-[state=checked]:bg-primary"
                 />
                 <label
-                  htmlFor="remember"
-                  className="text-sm font-medium text-muted-foreground cursor-pointer leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  htmlFor="terms"
+                  className="text-xs font-medium text-muted-foreground cursor-pointer leading-tight"
                 >
-                  Remember me
+                  I agree to the <span className="text-primary hover:underline cursor-pointer">Terms of Service</span> and <span className="text-primary hover:underline cursor-pointer">Privacy Policy</span>.
                 </label>
               </div>
             )}
+
+
 
             {/* Error/Success Messages */}
             {message && (
@@ -227,7 +257,7 @@ export default function Auth() {
 
         {/* Footer info */}
         <p className="text-center mt-10 text-xs text-muted-foreground opacity-60">
-          Securely powered by Supabase Auth &copy; 2024 Wonder Wraps LB
+          Securely powered by Supabase Auth &copy; 2026 Wonder Wraps LB
         </p>
       </div>
     </div>

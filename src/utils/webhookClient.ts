@@ -246,9 +246,16 @@ function extractFileData(obj: any): { url?: string, previewUrl?: string, downloa
       previewUrl = previewUrl.replace('/view', '/preview');
     }
 
-    // Special handling for images to use the thumbnail link for preview
+    // Special handling for images: use the signed thumbnailLink from the API response
+    // (files may not be publicly shared, so constructed URLs won't work)
     if (obj.mimeType?.startsWith('image/')) {
-      previewUrl = `https://drive.google.com/thumbnail?id=${obj.id}&sz=w1000`;
+      if (obj.thumbnailLink) {
+        // Use the signed thumbnail link at a larger size
+        previewUrl = obj.thumbnailLink.replace(/=s\d+$/, '=s1000');
+      } else {
+        // Fallback: try the public thumbnail endpoint (only works if file is shared)
+        previewUrl = `https://drive.google.com/thumbnail?id=${obj.id}&sz=w1000`;
+      }
     }
 
     return {

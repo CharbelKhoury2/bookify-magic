@@ -100,7 +100,7 @@ export default function Auth() {
             <BookOpen className="w-10 h-10 text-primary-foreground" />
           </div>
           <h1 className="text-4xl font-display font-bold text-gradient-magic">
-            Bookify Magic
+            Wonder Wraps LB
           </h1>
           <p className="text-muted-foreground mt-3 font-medium">
             Where your stories come to life ✨
@@ -227,7 +227,7 @@ export default function Auth() {
 
         {/* Footer info */}
         <p className="text-center mt-10 text-xs text-muted-foreground opacity-60">
-          Securely powered by Supabase Auth &copy; 2024 Bookify Magic
+          Securely powered by Supabase Auth &copy; 2024 Wonder Wraps LB
         </p>
       </div>
     </div>

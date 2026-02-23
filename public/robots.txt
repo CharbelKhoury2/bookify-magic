@@ -1,4 +1,4 @@
-# Professional standards robots.txt for Magic Bookify
+# Professional standards robots.txt for Wonder Wraps LB
 User-agent: *
 Allow: /
 Disallow: /admin

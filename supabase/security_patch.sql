@@ -1,5 +1,5 @@
 -- ######################################################################
--- # SUPABASE SECURITY PATCH FOR BOOKIFY MAGIC
+-- # SUPABASE SECURITY PATCH FOR WONDER WRAPS LB
 -- # This script enables Row Level Security (RLS) and sets up 
 -- # strictly controlled access policies for all tables.
 -- ######################################################################

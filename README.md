@@ -1,4 +1,4 @@
-# Magic Bookify | Personalized Children's Book Generator
+# Wonder Wraps LB | Personalized Children's Book Generator
 
 ## Project info
 

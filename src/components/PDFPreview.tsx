@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Download, Image, Maximize2 } from 'lucide-react';
+import { FileText, Download, Image, Maximize2, RotateCcw } from 'lucide-react';
 import { useBookStore } from '../store/bookStore';
 import { LoadingSpinner } from './LoadingSpinner';
 import { ImageModal } from './ImageModal';
@@ -16,7 +16,6 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
     coverImage,
     childName,
     selectedTheme,
-    generationProgress,
     pdfDownloadUrl,
     coverDownloadUrl
   } = useBookStore();
@@ -26,11 +25,9 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
   const handleDownloadCover = () => {
     if (coverDownloadUrl) {
       console.log('📥 Downloading cover from URL:', coverDownloadUrl);
-      // Open the cover download URL in a new tab
       safeOpen(coverDownloadUrl);
     } else if (coverImage) {
       console.log('📥 Downloading cover from preview URL:', coverImage);
-      // Fallback to the preview image if no download URL
       safeOpen(coverImage);
     }
   };
@@ -38,11 +35,9 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
   const handleDownloadPDF = () => {
     if (pdfDownloadUrl) {
       console.log('📥 Downloading PDF from URL:', pdfDownloadUrl);
-      // Open the PDF download URL in a new tab
       safeOpen(pdfDownloadUrl);
     } else {
       console.log('📥 Downloading PDF using fallback handler');
-      // Fallback to the original download handler
       onDownload();
     }
   };
@@ -53,7 +48,8 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
 
   if (isGenerating) {
     return (
-      <div className="card-magical flex flex-col items-center justify-center py-12 animate-fade-in">
+      <div className="card-magical flex flex-col items-center justify-center py-12 animate-fade-in relative overflow-hidden">
+        <div className="premium-blur -top-20 -right-20 opacity-30" />
         <div className="relative mb-6">
           <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl animate-pulse" />
           <LoadingSpinner size="lg" />
@@ -61,9 +57,23 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
         <h3 className="text-xl font-bold text-foreground mb-2">
           Creating Your Magical Book ✨
         </h3>
-        <p className="text-muted-foreground text-center max-w-xs">
+        <p className="text-muted-foreground text-center max-w-xs mb-8">
           Crafting beautiful pages with your story...
         </p>
+
+        {/* Force Cancel Button */}
+        <button
+          onClick={() => {
+            const { reset } = useBookStore.getState();
+            if (window.confirm("Are you sure you want to cancel the generation? This process cannot be resumed.")) {
+              reset();
+            }
+          }}
+          className="px-6 py-2.5 rounded-xl border-2 border-destructive/30 text-destructive font-bold hover:bg-destructive/5 hover:border-destructive/60 transition-all flex items-center gap-2 group text-sm"
+        >
+          <RotateCcw className="w-4 h-4 group-hover:rotate-[-180deg] transition-transform duration-500" />
+          Cancel & Start Over
+        </button>
       </div>
     );
   }
@@ -143,7 +153,6 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
               </div>
             )}
 
-            {/* PDF Preview Section */}
             <div className={coverImage ? "md:col-span-7 lg:col-span-8" : "md:col-span-12"}>
               <div className="space-y-3">
                 <p className="text-xs font-bold text-primary uppercase tracking-widest text-center md:text-left">Story Preview</p>

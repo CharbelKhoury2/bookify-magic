@@ -195,6 +195,13 @@ export const BookGenerator: React.FC = () => {
   };
 
   const handleReset = () => {
+    // If generation is in progress, confirm before force stopping
+    if (isGenerating) {
+      if (!window.confirm('Are you sure you want to force stop? The current generation cannot be resumed.')) {
+        return;
+      }
+    }
+
     reset();
     setGeneratedBlob(null);
     setGenerationProgress(0);
@@ -270,11 +277,13 @@ export const BookGenerator: React.FC = () => {
             {(generatedPDF || childName || selectedTheme || uploadedPhoto) && (
               <button
                 onClick={handleReset}
-                disabled={isGenerating}
-                className="px-6 py-3 rounded-xl border-2 border-border text-muted-foreground font-semibold hover:border-destructive hover:text-destructive transition-colors flex items-center justify-center gap-2"
+                className={`px-6 py-3 rounded-xl border-2 font-semibold transition-colors flex items-center justify-center gap-2 ${isGenerating
+                  ? 'border-destructive/30 text-destructive hover:bg-destructive/5 hover:border-destructive'
+                  : 'border-border text-muted-foreground hover:border-destructive hover:text-destructive'
+                  }`}
               >
-                <RotateCcw className="w-4 h-4" />
-                Start Over
+                <RotateCcw className={`w-4 h-4 ${isGenerating ? 'animate-spin-once' : ''}`} />
+                {isGenerating ? 'Force Stop' : 'Start Over'}
               </button>
             )}
           </div>

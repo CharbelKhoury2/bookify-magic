@@ -95,14 +95,17 @@ export async function startGenerationViaWebhook(
   onProgress?.(25);
 
   let data: any;
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute timeout
 
-    // STRICTLY ONE REQUEST: No retries, no fallback.
+  try {
+    console.log(`📡 [N8N] Attempting DIRECT request... (Timeout: 10m)`);
     const response = await fetch(N8N_WEBHOOK_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, application/pdf'
+      },
       body: JSON.stringify(payload),
       signal: controller.signal
     });
@@ -110,12 +113,13 @@ export async function startGenerationViaWebhook(
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => '');
+      const errorText = await response.text().catch(() => 'No error detail available');
       console.error(`❌ [N8N] HTTP ${response.status}:`, errorText);
-      throw new Error(`Magic Server Error (${response.status}). Please check your n8n workflow.`);
+      throw new Error(`Magic Server Error (${response.status}): ${errorText.substring(0, 100)}`);
     }
 
     const contentType = response.headers.get('Content-Type');
+    console.log(`📥 [N8N] Response received. Content-Type: ${contentType}`);
 
     // Handle direct PDF response
     if (contentType === 'application/pdf' || contentType?.includes('application/pdf')) {
@@ -125,6 +129,12 @@ export async function startGenerationViaWebhook(
     }
 
     const rawResponse = await response.text();
+    
+    if (!rawResponse || rawResponse.trim() === '') {
+      console.warn('⚠️ [N8N] Received an empty response from server.');
+      throw new Error('The magic server returned an empty response. Your book might still be processing, please check your library in a few minutes.');
+    }
+
     console.log('📥 [N8N] Raw response received (first 200 chars):', rawResponse.substring(0, 200));
 
     try {
@@ -141,13 +151,15 @@ export async function startGenerationViaWebhook(
         }
         return { pdfBlob: new Blob([bytes], { type: 'application/pdf' }) };
       }
+      console.error('❌ [N8N] JSON Parse Error. Raw body:', rawResponse.substring(0, 500));
       throw new Error('Received an unreadable response from the magic server.');
     }
   } catch (err: any) {
+    clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
-      throw new Error('The magic is taking a bit too long. Please try again later.');
+      throw new Error('The magic is taking over 10 minutes. Please check your magical library later.');
     }
-    console.error('🛑 [GENERATOR] Fatal error during direct n8n call:', err);
+    console.error('🛑 [GENERATOR] Fetch error:', err);
     throw err;
   }
 

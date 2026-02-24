@@ -89,31 +89,65 @@ export async function startGenerationViaWebhook(
     photoMime: photoFile.type || 'image/jpeg',
   };
 
-  console.log('🚀 [GENERATOR] Sending request to Edge Function fallback...');
+  const N8N_WEBHOOK_URL = import.meta.env.VITE_N8N_WEBHOOK_URL || "https://wonderwrapslb.app.n8n.cloud/webhook/2b7a5bec-96be-4571-8c7c-aaec8d0934fc";
+
+  console.log('🚀 [GENERATOR] Sending DIRECT request to n8n (Live Webhook)...');
   onProgress?.(25);
 
   let data: any;
   try {
-    // We now use the Edge Function as the primary path to avoid CORS issues and multiple triggers
-    const { data: edgeData, error } = await supabase.functions.invoke('generate-book', {
-      body: payload,
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute timeout
+
+    // STRICTLY ONE REQUEST: No retries, no fallback.
+    const response = await fetch(N8N_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
 
-    if (error) {
-      console.error('❌ [EDGE] Generation failed:', error);
-      
-      // Handle non-2xx errors specifically
-      if (error.message?.includes('non-2xx')) {
-        throw new Error('The magic service is currently busy processing other books. Please try again in a few minutes.');
-      }
-      
-      throw new Error(error.message || 'The magic service is currently unavailable.');
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      console.error(`❌ [N8N] HTTP ${response.status}:`, errorText);
+      throw new Error(`Magic Server Error (${response.status}). Please check your n8n workflow.`);
     }
 
-    data = edgeData;
-    console.log('📦 [EDGE] Data received:', data);
+    const contentType = response.headers.get('Content-Type');
+
+    // Handle direct PDF response
+    if (contentType === 'application/pdf' || contentType?.includes('application/pdf')) {
+      console.log('📄 [N8N] Received direct PDF binary response');
+      const blob = await response.blob();
+      return { pdfBlob: blob };
+    }
+
+    const rawResponse = await response.text();
+    console.log('📥 [N8N] Raw response received (first 200 chars):', rawResponse.substring(0, 200));
+
+    try {
+      const parsed = JSON.parse(rawResponse);
+      // n8n sometimes wraps the response in an array
+      data = Array.isArray(parsed) ? (parsed[0]?.body || parsed[0] || parsed) : (parsed.body || parsed);
+    } catch (e) {
+      // If it looks like a PDF binary but didn't have the right header
+      if (rawResponse.startsWith('%PDF')) {
+        console.log('📄 [N8N] Detected direct PDF binary response (via text fallback)');
+        const bytes = new Uint8Array(rawResponse.length);
+        for (let i = 0; i < rawResponse.length; i++) {
+          bytes[i] = rawResponse.charCodeAt(i) & 0xff;
+        }
+        return { pdfBlob: new Blob([bytes], { type: 'application/pdf' }) };
+      }
+      throw new Error('Received an unreadable response from the magic server.');
+    }
   } catch (err: any) {
-    console.error('🛑 [GENERATOR] Fatal error during generation:', err);
+    if (err.name === 'AbortError') {
+      throw new Error('The magic is taking a bit too long. Please try again later.');
+    }
+    console.error('🛑 [GENERATOR] Fatal error during direct n8n call:', err);
     throw err;
   }
 
@@ -131,7 +165,7 @@ export async function startGenerationViaWebhook(
     return pollGenerationStatus(data.statusUrl || data.jobId || data.id, onProgress);
   }
 
-  // 2. Direct PDF Blob (returned from Edge Function pass-through)
+  // 2. Direct PDF Blob
   if (data instanceof Blob) {
     onProgress?.(100);
     return { pdfBlob: data };

@@ -81,7 +81,7 @@ export async function startGenerationViaWebhook(
   const photoBase64 = await imageToBase64(photoFile);
   onProgress?.(10);
 
-  // 1. Log the start in DB
+  // 1. Log the start in DB to get the ID for n8n
   const generationId = await logGenerationStart(childName.trim(), theme.id, theme.name);
   if (!generationId) throw new Error("Failed to initialize generation in database.");
 
@@ -96,78 +96,117 @@ export async function startGenerationViaWebhook(
 
   const N8N_WEBHOOK_URL = "https://wonderwrapslb.app.n8n.cloud/webhook/2b7a5bec-96be-4571-8c7c-aaec8d0934fc";
 
-  console.log('🚀 [GENERATOR] Calling n8n and monitoring DB status...');
+  console.log('🚀 [GENERATOR] Calling n8n and starting DB monitor...');
   onProgress?.(20);
 
-  // 2. Start the n8n request and the DB watcher in parallel
-  // We use Promise.race or similar logic to handle the results
+  // Define the n8n request as a separate promise
   const n8nRequest = async () => {
-    const response = await fetch(N8N_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const response = await fetch(N8N_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
 
-    if (!response.ok) {
-      throw new Error(`Magic Server Error (${response.status})`);
+      if (!response.ok) {
+        throw new Error(`n8n error (${response.status})`);
+      }
+
+      const contentType = response.headers.get('Content-Type');
+      if (contentType?.includes('application/pdf')) {
+        const blob = await response.blob();
+        return { pdfBlob: blob };
+      }
+
+      const text = await response.text();
+      if (!text || text.trim() === "") return null;
+
+      try {
+        const data = JSON.parse(text);
+        const s = Array.isArray(data) ? data[0] : data;
+        return {
+          pdfUrl: s.pdfUrl || s.url || s.pdf_url,
+          coverImageUrl: s.coverImageUrl || s.thumbnailUrl || s.image_url,
+          pdfDownloadUrl: s.pdfUrl || s.url || s.pdf_url,
+          coverDownloadUrl: s.coverImageUrl || s.image_url
+        };
+      } catch (e) {
+        if (text.startsWith('%PDF')) {
+          const bytes = new Uint8Array(text.length);
+          for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i) & 0xff;
+          return { pdfBlob: new Blob([bytes], { type: 'application/pdf' }) };
+        }
+        return null;
+      }
+    } catch (e) {
+      console.warn('📡 [N8N] Webhook connection dropped or failed:', e);
+      return null; // Don't throw, let the DB monitor handle it
     }
-
-    const contentType = response.headers.get('Content-Type');
-    if (contentType?.includes('application/pdf')) {
-      const blob = await response.blob();
-      return { pdfBlob: blob };
-    }
-
-    const data = await response.json();
-    const s = Array.isArray(data) ? data[0] : data;
-    
-    // Support the various response shapes n8n might send
-    return {
-      pdfUrl: s.pdfUrl || s.url || s.pdf_url,
-      coverImageUrl: s.coverImageUrl || s.thumbnailUrl || s.image_url,
-      pdfDownloadUrl: s.pdfUrl || s.url || s.pdf_url,
-      coverDownloadUrl: s.coverImageUrl || s.image_url
-    };
   };
 
+  // Define the DB watcher as a separate promise
   const dbWatcher = async () => {
     const maxAttempts = 120; // 20 minutes
     let attempts = 0;
+    
+    console.log('⏳ [DB] Waiting 10 seconds before first check...');
+    await new Promise(r => setTimeout(r, 10000)); // Initial 10s wait as requested
+
     while (attempts < maxAttempts) {
       attempts++;
-      const { data } = await supabase.from('book_generations').select('status').eq('id', generationId).single();
       
-      if (data?.status === 'completed') {
-        console.log('✅ [WATCHER] DB shows completed. Finalizing...');
-        onProgress?.(95);
-        return 'done';
+      // Artificial progress while waiting
+      if (attempts < 100) onProgress?.(Math.min(95, 20 + (attempts * 0.5)));
+
+      try {
+        const { data, error } = await supabase
+          .from('book_generations')
+          .select('*')
+          .eq('id', generationId)
+          .single();
+
+        if (!error && data) {
+          if (data.status === 'completed') {
+            console.log('✅ [DB] Status marked as completed!');
+            return data;
+          }
+          if (data.status === 'failed') {
+            throw new Error(data.error_message || 'The AI magic encountered an issue.');
+          }
+        }
+      } catch (e) {
+        console.warn('🔍 [DB] Poll failed, retrying...', e);
       }
-      if (data?.status === 'failed') throw new Error('Generation failed according to database.');
-      
-      await new Promise(r => setTimeout(r, 10000)); // Check every 10s
+      await new Promise(r => setTimeout(r, 10000)); // Poll every 10s
     }
-    throw new Error('Timeout waiting for database update.');
+    throw new Error('Generation timed out. Please check your library later.');
   };
 
-  // We wait for the n8n request primarily, but use the DB watcher to keep the UI alive
-  try {
-    const result = await Promise.race([
-      n8nRequest(),
-      dbWatcher().then(() => new Promise(r => setTimeout(r, 30000))) // Give n8n extra time to finish after DB update
-    ]);
+  // EXECUTION LOGIC:
+  // We start n8nRequest, but we rely on dbWatcher to tell us when it's truly done.
+  const n8nPromise = n8nRequest();
+  const dbResult = await dbWatcher();
 
-    if (result === undefined || typeof result === 'string') {
-      // If the watcher finished but the request didn't return data yet, 
-      // we try one last time to wait for the n8n request specifically
-      return await n8nRequest();
-    }
+  // Once DB says "completed", we check if the n8n request gave us data
+  const n8nResult = await n8nPromise;
 
+  if (n8nResult && (n8nResult.pdfBlob || n8nResult.pdfUrl)) {
     onProgress?.(100);
-    return result;
-  } catch (err: any) {
-    console.error('🛑 [GENERATOR] Error:', err);
-    throw err;
+    return n8nResult;
   }
+
+  // If n8n connection dropped but DB says completed, check if DB has the URLs
+  if (dbResult.pdf_url || dbResult.generated_pdf_url) {
+    onProgress?.(100);
+    return {
+      pdfUrl: dbResult.pdf_url || dbResult.generated_pdf_url,
+      coverImageUrl: dbResult.thumbnail_url || dbResult.cover_image_url,
+      pdfDownloadUrl: dbResult.pdf_url || dbResult.generated_pdf_url,
+    };
+  }
+
+  // Final fallback: If DB says completed but we have no URLs anywhere
+  throw new Error('Your book is ready! You can find it in your "My Library" section.');
 }
 
 /**

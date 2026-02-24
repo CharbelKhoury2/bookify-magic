@@ -89,9 +89,9 @@ export async function startGenerationViaWebhook(
     photoMime: photoFile.type || 'image/jpeg',
   };
 
-  const N8N_WEBHOOK_URL = "https://wonderwrapslb.app.n8n.cloud/webhook-test/2b7a5bec-96be-4571-8c7c-aaec8d0934fc";
+  const N8N_WEBHOOK_URL = import.meta.env.VITE_N8N_WEBHOOK_URL || "https://wonderwrapslb.app.n8n.cloud/webhook/2b7a5bec-96be-4571-8c7c-aaec8d0934fc";
 
-  console.log('🚀 [GENERATOR] Sending request to n8n (Test Webhook):', payload.childName);
+  console.log('🚀 [GENERATOR] Sending request to n8n (Live Webhook):', payload.childName);
 
   let data: any;
   let retryCount = 0;

@@ -3,7 +3,6 @@ import { FileText, Download, Image, Maximize2, RotateCcw, Clock } from 'lucide-r
 import { useBookStore } from '../store/bookStore';
 import { LoadingSpinner } from './LoadingSpinner';
 import { ImageModal } from './ImageModal';
-import { ProgressBar } from './ProgressBar';
 import { safeOpen } from '../utils/security';
 
 interface PDFPreviewProps {
@@ -19,8 +18,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
     selectedTheme,
     pdfDownloadUrl,
     coverDownloadUrl,
-    elapsedTime,
-    generationProgress
+    elapsedTime
   } = useBookStore();
 
   const [isImageModalOpen, setIsImageModalOpen] = React.useState(false);
@@ -113,14 +111,9 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
         <h3 className="text-xl font-bold text-foreground mb-2">
           Creating Your Magical Book ✨
         </h3>
-        <p className="text-muted-foreground text-center max-w-xs mb-8">
+        <p className="text-muted-foreground text-center max-w-xs mb-10">
           Crafting beautiful pages with your story...
         </p>
-
-        {/* Progress Bar */}
-        <div className="w-full max-w-md mb-6 px-4">
-          <ProgressBar value={generationProgress} label="Generation Progress" />
-        </div>
 
         {/* Elapsed Timer */}
         <div className="flex flex-col items-center mb-10">

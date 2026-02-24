@@ -8,7 +8,6 @@ interface BookStore {
   uploadedPhoto: File | null;
   processedPhoto: ProcessedPhoto | null;
   isGenerating: boolean;
-  generationProgress: number; // 0-100
   generatedPDF: string | null;
   coverImage: string | null;
   pdfDownloadUrl: string | null;
@@ -22,7 +21,6 @@ interface BookStore {
   setUploadedPhoto: (photo: File | null) => void;
   setProcessedPhoto: (photo: ProcessedPhoto | null) => void;
   setIsGenerating: (status: boolean) => void;
-  setGenerationProgress: (p: number) => void;
   setGeneratedPDF: (url: string | null) => void;
   setCoverImage: (url: string | null) => void;
   setPdfDownloadUrl: (url: string | null) => void;
@@ -42,7 +40,6 @@ export const useBookStore = create<BookStore>()(
       uploadedPhoto: null,
       processedPhoto: null,
       isGenerating: false,
-      generationProgress: 0,
       generatedPDF: null,
       coverImage: null,
       pdfDownloadUrl: null,
@@ -56,7 +53,6 @@ export const useBookStore = create<BookStore>()(
       setUploadedPhoto: (photo) => set({ uploadedPhoto: photo, photoName: photo ? photo.name : null }),
       setProcessedPhoto: (photo) => set({ processedPhoto: photo }),
       setIsGenerating: (status) => set({ isGenerating: status }),
-      setGenerationProgress: (p) => set({ generationProgress: p }),
       setGeneratedPDF: (url) => set({ generatedPDF: url }),
       setCoverImage: (url) => set({ coverImage: url }),
       setPdfDownloadUrl: (url) => set({ pdfDownloadUrl: url }),
@@ -74,7 +70,6 @@ export const useBookStore = create<BookStore>()(
         pdfDownloadUrl: data.pdfDownloadUrl || null,
         coverDownloadUrl: data.coverDownloadUrl || null,
         isGenerating: false,
-        generationProgress: 100,
         currentGenerationId: null,
         elapsedTime: 0
       }),
@@ -84,7 +79,6 @@ export const useBookStore = create<BookStore>()(
         uploadedPhoto: null,
         processedPhoto: null,
         isGenerating: false,
-        generationProgress: 0,
         generatedPDF: null,
         coverImage: null,
         pdfDownloadUrl: null,
@@ -101,7 +95,6 @@ export const useBookStore = create<BookStore>()(
         childName: state.childName,
         selectedTheme: state.selectedTheme,
         isGenerating: state.isGenerating,
-        generationProgress: state.generationProgress,
         currentGenerationId: state.currentGenerationId,
         processedPhoto: state.processedPhoto,
         photoName: state.photoName,

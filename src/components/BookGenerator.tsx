@@ -26,8 +26,6 @@ export const BookGenerator: React.FC = () => {
     setGeneratedPDF,
     coverImage,
     setCoverImage,
-    generationProgress,
-    setGenerationProgress,
     pdfDownloadUrl,
     setPdfDownloadUrl,
     pdfDownloadBlob,
@@ -92,7 +90,6 @@ export const BookGenerator: React.FC = () => {
       const timer = setTimeout(() => {
         if (isGenerating) {
           setIsGenerating(false);
-          setGenerationProgress(0);
           setCurrentGenerationId(null);
           showToast('The magic session took longer than expected. If it continues, please check your network or try again later.', 'error');
         }
@@ -118,7 +115,6 @@ export const BookGenerator: React.FC = () => {
     try {
       console.log('🚀 [UI] Starting generation process...');
       setIsGenerating(true);
-      setGenerationProgress(0);
       setCoverImage(null);
       setPdfDownloadUrl(null);
       setPdfDownloadBlob(null);
@@ -137,7 +133,6 @@ export const BookGenerator: React.FC = () => {
           uploadedPhoto,
           (p) => {
             console.log(`📊 [UI] Progress: ${p}%`);
-            setGenerationProgress(p);
           }
         );
       } catch (webhookError: any) {
@@ -193,7 +188,6 @@ export const BookGenerator: React.FC = () => {
       console.log('🎉 [UI] Generation complete! Finalizing state.');
       setGeneratedPDF(finalPdfUrl);
       setIsGenerating(false);
-      setGenerationProgress(100);
       setCurrentGenerationId(null);
       setShowFinished(true); // Show the success modal
       showToast('Your magical book is ready!', 'success');
@@ -206,7 +200,6 @@ export const BookGenerator: React.FC = () => {
       }
 
       setIsGenerating(false);
-      setGenerationProgress(0);
       setCurrentGenerationId(null);
       const message = error instanceof Error ? error.message : 'Failed to generate book. Please try again.';
       showToast(message, 'error');
@@ -233,7 +226,6 @@ export const BookGenerator: React.FC = () => {
 
     reset();
     setGeneratedBlob(null);
-    setGenerationProgress(0);
     setShowFinished(false);
     setCoverImage(null);
     setPdfDownloadUrl(null);

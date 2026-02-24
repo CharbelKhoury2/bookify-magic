@@ -89,7 +89,7 @@ export async function startGenerationViaWebhook(
     photoMime: photoFile.type || 'image/jpeg',
   };
 
-  const N8N_WEBHOOK_URL = import.meta.env.VITE_N8N_WEBHOOK_URL || "https://wonderwrapslb.app.n8n.cloud/webhook/2b7a5bec-96be-4571-8c7c-aaec8d0934fc";
+  const N8N_WEBHOOK_URL = import.meta.env.VITE_N8N_WEBHOOK_URL || "https://wonderwrapslb.app.n8n.cloud/webhook/fff2b7a5bec-96be-4571-8c7c-aaec8d0934fc";
 
   console.log('🚀 [GENERATOR] Sending request to n8n (Live Webhook):', payload.childName);
 
@@ -130,7 +130,7 @@ export async function startGenerationViaWebhook(
       }
 
       const contentType = response.headers.get('Content-Type');
-      
+
       // Handle direct PDF response
       if (contentType === 'application/pdf' || contentType?.includes('application/pdf')) {
         console.log('📄 [N8N] Received direct PDF binary response');
@@ -189,12 +189,12 @@ export async function startGenerationViaWebhook(
 
     if (error) {
       console.error('❌ [EDGE] Fallback also failed:', error);
-      
+
       // If the error message indicates a non-2xx status, it's likely a validation or n8n error
       if (error.message?.includes('non-2xx')) {
         throw new Error('The magic service encountered an error while processing your book. Please try again in a few minutes.');
       }
-      
+
       throw new Error(error.message || 'The magic service is currently unavailable.');
     }
 
@@ -204,8 +204,8 @@ export async function startGenerationViaWebhook(
   // 1. Check for jobId or statusUrl indicating a long-running process
   // Also check for status fields that indicate processing
   const isProcessing = data && (
-    ['queued', 'running', 'processing', 'pending', 'waiting', 'started'].includes(data.status?.toLowerCase()) || 
-    data.jobId || 
+    ['queued', 'running', 'processing', 'pending', 'waiting', 'started'].includes(data.status?.toLowerCase()) ||
+    data.jobId ||
     data.statusUrl ||
     (data.message?.toLowerCase().includes('started') && !data.pdfUrl && !data.pdfBase64)
   );
@@ -250,9 +250,9 @@ export async function startGenerationViaWebhook(
 
     const pdfData = extractFileData(pdfItem || (pdfItem === undefined ? items.find((i: any) => {
       const extracted = extractFileData(i);
-      return (extracted.url?.toLowerCase().endsWith('.pdf')) || 
-             (extracted.base64?.startsWith('data:application/pdf')) ||
-             (extracted.blob?.type === 'application/pdf');
+      return (extracted.url?.toLowerCase().endsWith('.pdf')) ||
+        (extracted.base64?.startsWith('data:application/pdf')) ||
+        (extracted.blob?.type === 'application/pdf');
     }) : null));
     const coverData = extractFileData(coverItem);
 

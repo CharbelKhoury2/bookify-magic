@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
     // Parse and validate body
     const body = await req.json();
 
-    const { childName, themeId, themeName, photoBase64, photoMime } = body;
+    const { generationId, childName, themeId, themeName, photoBase64, photoMime } = body;
 
     // Validate childName
     if (
@@ -102,6 +102,7 @@ Deno.serve(async (req) => {
 
     // Forward validated data to n8n
     const validatedBody = {
+      generationId, // Forward the unique ID
       childName: childName.trim(),
       themeId,
       themeName: typeof themeName === "string" ? themeName.slice(0, 50) : "",
@@ -109,12 +110,17 @@ Deno.serve(async (req) => {
       photoMime,
     };
 
+    const startTime = Date.now();
     console.log(`📡 [EDGE] Forwarding request to n8n...`);
+    
     const n8nRes = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(validatedBody),
     });
+
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`📥 [EDGE] n8n responded after ${duration}s with status ${n8nRes.status}`);
 
     if (!n8nRes.ok) {
       const errorText = await n8nRes.text().catch(() => "Unknown n8n error");

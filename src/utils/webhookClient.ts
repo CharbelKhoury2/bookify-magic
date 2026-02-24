@@ -79,9 +79,14 @@ export async function startGenerationViaWebhook(
 }> {
   onProgress?.(5);
   const photoBase64 = await imageToBase64(photoFile);
-  onProgress?.(15);
+  onProgress?.(10);
+
+  // 1. Log the start in DB
+  const generationId = await logGenerationStart(childName.trim(), theme.id, theme.name);
+  if (!generationId) throw new Error("Failed to initialize generation in database.");
 
   const payload = {
+    generationId,
     childName: childName.trim(),
     themeId: theme.id,
     themeName: theme.name,
@@ -89,185 +94,134 @@ export async function startGenerationViaWebhook(
     photoMime: photoFile.type || 'image/jpeg',
   };
 
-  const N8N_WEBHOOK_URL = import.meta.env.VITE_N8N_WEBHOOK_URL || "https://wonderwrapslb.app.n8n.cloud/webhook/2b7a5bec-96be-4571-8c7c-aaec8d0934fc";
+  const N8N_WEBHOOK_URL = "https://wonderwrapslb.app.n8n.cloud/webhook/2b7a5bec-96be-4571-8c7c-aaec8d0934fc";
 
-  console.log('🚀 [GENERATOR] Sending DIRECT request to n8n (Live Webhook)...');
-  onProgress?.(25);
+  console.log('🚀 [GENERATOR] Calling n8n and monitoring DB status...');
+  onProgress?.(20);
 
-  let data: any;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 1800000); // 30 minute timeout
-
-  try {
-    console.log(`📡 [N8N] Attempting DIRECT request... (Timeout: 30m)`);
+  // 2. Start the n8n request and the DB watcher in parallel
+  // We use Promise.race or similar logic to handle the results
+  const n8nRequest = async () => {
     const response = await fetch(N8N_WEBHOOK_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json, application/pdf'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-      signal: controller.signal
     });
 
-    clearTimeout(timeoutId);
-
     if (!response.ok) {
-      const errorText = await response.text().catch(() => 'No error detail available');
-      console.error(`❌ [N8N] HTTP ${response.status}:`, errorText);
-      throw new Error(`Magic Server Error (${response.status}): ${errorText.substring(0, 100)}`);
+      throw new Error(`Magic Server Error (${response.status})`);
     }
 
     const contentType = response.headers.get('Content-Type');
-    console.log(`📥 [N8N] Response received. Content-Type: ${contentType}`);
-
-    // Handle direct PDF response
-    if (contentType === 'application/pdf' || contentType?.includes('application/pdf')) {
-      console.log('📄 [N8N] Received direct PDF binary response');
+    if (contentType?.includes('application/pdf')) {
       const blob = await response.blob();
       return { pdfBlob: blob };
     }
 
-    const rawResponse = await response.text();
+    const data = await response.json();
+    const s = Array.isArray(data) ? data[0] : data;
+    
+    // Support the various response shapes n8n might send
+    return {
+      pdfUrl: s.pdfUrl || s.url || s.pdf_url,
+      coverImageUrl: s.coverImageUrl || s.thumbnailUrl || s.image_url,
+      pdfDownloadUrl: s.pdfUrl || s.url || s.pdf_url,
+      coverDownloadUrl: s.coverImageUrl || s.image_url
+    };
+  };
 
-    if (!rawResponse || rawResponse.trim() === '') {
-      console.warn('⚠️ [N8N] Received an empty response from server.');
-      throw new Error('The magic server returned an empty response. Your book might still be processing, please check your library in a few minutes.');
-    }
-
-    console.log('📥 [N8N] Raw response received (first 200 chars):', rawResponse.substring(0, 200));
-
-    try {
-      const parsed = JSON.parse(rawResponse);
-      // n8n sometimes wraps the response in an array
-      data = Array.isArray(parsed) ? (parsed[0]?.body || parsed[0] || parsed) : (parsed.body || parsed);
-    } catch (e) {
-      // If it looks like a PDF binary but didn't have the right header
-      if (rawResponse.startsWith('%PDF')) {
-        console.log('📄 [N8N] Detected direct PDF binary response (via text fallback)');
-        const bytes = new Uint8Array(rawResponse.length);
-        for (let i = 0; i < rawResponse.length; i++) {
-          bytes[i] = rawResponse.charCodeAt(i) & 0xff;
-        }
-        return { pdfBlob: new Blob([bytes], { type: 'application/pdf' }) };
+  const dbWatcher = async () => {
+    const maxAttempts = 120; // 20 minutes
+    let attempts = 0;
+    while (attempts < maxAttempts) {
+      attempts++;
+      const { data } = await supabase.from('book_generations').select('status').eq('id', generationId).single();
+      
+      if (data?.status === 'completed') {
+        console.log('✅ [WATCHER] DB shows completed. Finalizing...');
+        onProgress?.(95);
+        return 'done';
       }
-      console.error('❌ [N8N] JSON Parse Error. Raw body:', rawResponse.substring(0, 500));
-      throw new Error('Received an unreadable response from the magic server.');
+      if (data?.status === 'failed') throw new Error('Generation failed according to database.');
+      
+      await new Promise(r => setTimeout(r, 10000)); // Check every 10s
     }
+    throw new Error('Timeout waiting for database update.');
+  };
+
+  // We wait for the n8n request primarily, but use the DB watcher to keep the UI alive
+  try {
+    const result = await Promise.race([
+      n8nRequest(),
+      dbWatcher().then(() => new Promise(r => setTimeout(r, 30000))) // Give n8n extra time to finish after DB update
+    ]);
+
+    if (result === undefined || typeof result === 'string') {
+      // If the watcher finished but the request didn't return data yet, 
+      // we try one last time to wait for the n8n request specifically
+      return await n8nRequest();
+    }
+
+    onProgress?.(100);
+    return result;
   } catch (err: any) {
-    clearTimeout(timeoutId);
-    if (err.name === 'AbortError') {
-      throw new Error('The magic is taking over 30 minutes. Please check your magical library later.');
-    }
-    console.error('🛑 [GENERATOR] Fetch error:', err);
+    console.error('🛑 [GENERATOR] Error:', err);
     throw err;
   }
+}
 
-  // 1. Check for jobId or statusUrl indicating a long-running process
-  const isProcessing = data && (
-    ['queued', 'running', 'processing', 'pending', 'waiting', 'started'].includes(data.status?.toLowerCase()) ||
-    data.jobId ||
-    data.statusUrl ||
-    (data.message?.toLowerCase().includes('started') && !data.pdfUrl && !data.pdfBase64)
-  );
+/**
+ * Watches the Supabase database for the result, avoiding browser timeouts
+ */
+async function pollDatabaseStatus(
+  generationId: string,
+  onProgress?: (p: number) => void
+): Promise<any> {
+  const maxAttempts = 180; // 30 minutes (10s intervals)
+  let attempts = 0;
 
-  if (isProcessing) {
-    console.log('⏳ [POLL] Long task detected. Entering polling mode...');
-    onProgress?.(40);
-    return pollGenerationStatus(data.statusUrl || data.jobId || data.id, onProgress);
-  }
+  console.log(`📡 [WATCHER] Monitoring Database for ID: ${generationId}`);
 
-  // 2. Direct PDF Blob
-  if (data instanceof Blob) {
-    onProgress?.(100);
-    return { pdfBlob: data };
-  }
-
-  const start: GenerationStartResponse = data;
-  if (start && start.pdfBlob) {
-    onProgress?.(100);
-    return { pdfBlob: start.pdfBlob };
-  }
-
-  // 3. Array or Object with files (common in multi-upload responses)
-  const s = start as any;
-  const items = Array.isArray(start) ? start : (s?.files || s?.items || (s?.result && Array.isArray(s.result) ? s.result : null));
-
-  if (items && Array.isArray(items)) {
-    console.log(`📦 [N8N] Found ${items.length} items in response`);
-    const pdfItem = items.find((item: any) =>
-      (item.mimeType === 'application/pdf') ||
-      (item.name?.toLowerCase().endsWith('.pdf')) ||
-      (item.contentType === 'application/pdf') ||
-      (typeof item === 'string' && (item.endsWith('.pdf') || item.includes('application/pdf')))
-    );
-
-    const coverItem = items.find((item: any) =>
-      (item.mimeType?.startsWith('image/')) ||
-      (item.name?.toLowerCase().match(/\.(jpg|jpeg|png|webp)$/)) ||
-      (item.name?.toLowerCase().includes('cover')) ||
-      (item.name?.toLowerCase().includes('thumb'))
-    );
-
-    const pdfData = extractFileData(pdfItem || (pdfItem === undefined ? items.find((i: any) => {
-      const extracted = extractFileData(i);
-      return (extracted.url?.toLowerCase().endsWith('.pdf')) ||
-        (extracted.base64?.startsWith('data:application/pdf')) ||
-        (extracted.blob?.type === 'application/pdf');
-    }) : null));
-    const coverData = extractFileData(coverItem);
-
-    if (pdfData.url || pdfData.base64 || pdfData.blob) {
-      onProgress?.(100);
-
-      let pdfBlob = pdfData.blob;
-      if (pdfData.base64 && !pdfBlob) {
-        pdfBlob = base64ToBlob(pdfData.base64, 'application/pdf');
-      }
-
-      let coverImageUrl = coverData.previewUrl || coverData.url;
-      if (!coverImageUrl && coverData.base64) {
-        coverImageUrl = `data:image/jpeg;base64,${coverData.base64.replace(/^data:image\/[a-z]+;base64,/, '')}`;
-      }
-
-      if (coverItem?.id && coverItem?.kind === 'drive#file') {
-        const driveId = coverItem.id;
-        coverImageUrl = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1000`;
-      }
-
-      return {
-        pdfUrl: pdfData.previewUrl || pdfData.url,
-        pdfBlob: pdfBlob,
-        coverImageUrl,
-        pdfDownloadUrl: pdfData.downloadUrl || pdfData.url,
-        coverDownloadUrl: coverData.downloadUrl || coverData.url
-      };
+  while (attempts < maxAttempts) {
+    attempts++;
+    
+    // Slowly simulate progress if we don't have real progress data
+    if (attempts < 100) {
+      onProgress?.(20 + (attempts * 0.5)); 
     }
-  }
 
-  // 4. Standalone fields (pdfUrl, pdfBase64, etc.)
-  const pdfUrl = s?.pdfUrl || s?.pdf_url || s?.url || (typeof start === 'string' && (start as string).startsWith('http') ? start : undefined);
-  const pdfBase64 = s?.pdfBase64 || s?.pdf_base64 || s?.pdf_data || s?.data || (typeof start === 'string' && (start as string).length > 1000 ? start : undefined);
-  let coverImageUrl = s?.coverImageUrl || s?.cover_url || s?.thumbnailUrl || s?.image_url;
+    try {
+      const { data, error } = await supabase
+        .from('book_generations')
+        .select('*')
+        .eq('id', generationId)
+        .single();
 
-  if (s?.coverImageBase64 || s?.cover_base64 || s?.image_data) {
-    const b64 = s?.coverImageBase64 || s?.cover_base64 || s?.image_data;
-    coverImageUrl = `data:image/jpeg;base64,${b64.replace(/^data:image\/[a-z]+;base64,/, '')}`;
-  }
+      if (error) throw error;
 
-  if (pdfBase64 || pdfUrl) {
-    onProgress?.(90);
-    if (pdfBase64) {
-      const pdfBlob = base64ToBlob(pdfBase64 as string, 'application/pdf');
-      onProgress?.(100);
-      return { pdfBlob, coverImageUrl };
+      if (data.status && data.status.startsWith('completed:')) {
+        const pdfUrl = data.status.replace('completed:', '').trim();
+        console.log('✅ [WATCHER] Book found! PDF URL:', pdfUrl);
+        onProgress?.(100);
+        return {
+          pdfUrl: pdfUrl,
+          pdfDownloadUrl: pdfUrl,
+        };
+      }
+
+      if (data.status === 'failed') {
+        throw new Error(data.error_message || 'The AI magic encountered an issue.');
+      }
+
+    } catch (e) {
+      console.warn('⚠️ [WATCHER] DB check failed, retrying...', e);
     }
-    onProgress?.(100);
-    return { pdfUrl, coverImageUrl: coverImageUrl as string };
+
+    // Wait 10 seconds before next check
+    await new Promise(resolve => setTimeout(resolve, 10000));
   }
 
-  console.error('🛑 [N8N] Could not extract PDF from response:', data);
-  throw new Error('Your book was created, but we had trouble retrieving the file. Please check your history in a few moments.');
+  throw new Error('The magic is taking longer than 30 minutes. Please check your library later.');
 }
 
 /**
@@ -283,16 +237,16 @@ async function pollGenerationStatus(
   pdfDownloadUrl?: string;
   coverDownloadUrl?: string;
 }> {
-  const maxAttempts = 60; // 10 minutes (10s intervals)
+  const maxAttempts = 180; // 30 minutes (10s intervals)
   let attempts = 0;
 
-  // Determine the status URL
+  // Update this to your LIVE production status webhook URL
   let statusUrl = statusUrlOrId;
   if (!statusUrlOrId.startsWith('http')) {
-    // If only an ID was provided, we assume it's part of the n8n status endpoint
-    // This depends on the n8n implementation.
-    statusUrl = `https://wonderwrapslb.app.n8n.cloud/webhook/status/${statusUrlOrId}`;
+    statusUrl = `https://wonderwrapslb.app.n8n.cloud/webhook/2b7a5bec-96be-4571-8c7c-aaec8d0934fc/status?jobId=${statusUrlOrId}`;
   }
+
+  console.log('🔍 [POLL] Starting status checks at:', statusUrl);
 
   while (attempts < maxAttempts) {
     attempts++;
@@ -347,7 +301,7 @@ async function pollGenerationStatus(
     await new Promise(resolve => setTimeout(resolve, 10000));
   }
 
-  throw new Error('Generation timed out after 10 minutes. Please check your magical library later.');
+  throw new Error('Generation timed out after 30 minutes. Please check your magical library later.');
 }
 
 function base64ToBlob(base64: string, mime: string) {

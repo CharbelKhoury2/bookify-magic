@@ -1,8 +1,9 @@
 import React from 'react';
-import { FileText, Download, Image, Maximize2, RotateCcw } from 'lucide-react';
+import { FileText, Download, Image, Maximize2, RotateCcw, Clock } from 'lucide-react';
 import { useBookStore } from '../store/bookStore';
 import { LoadingSpinner } from './LoadingSpinner';
 import { ImageModal } from './ImageModal';
+import { ProgressBar } from './ProgressBar';
 import { safeOpen } from '../utils/security';
 
 interface PDFPreviewProps {
@@ -17,12 +18,21 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
     childName,
     selectedTheme,
     pdfDownloadUrl,
-    coverDownloadUrl
+    coverDownloadUrl,
+    elapsedTime,
+    generationProgress
   } = useBookStore();
 
   const [isImageModalOpen, setIsImageModalOpen] = React.useState(false);
   const [coverRetryCount, setCoverRetryCount] = React.useState(0);
   const [effectiveCoverUrl, setEffectiveCoverUrl] = React.useState<string | null>(null);
+
+  // Format elapsed time as MM:SS
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // Reset retry count when coverImage changes
   React.useEffect(() => {
@@ -106,6 +116,24 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
         <p className="text-muted-foreground text-center max-w-xs mb-8">
           Crafting beautiful pages with your story...
         </p>
+
+        {/* Progress Bar */}
+        <div className="w-full max-w-md mb-6 px-4">
+          <ProgressBar value={generationProgress} label="Generation Progress" />
+        </div>
+
+        {/* Elapsed Timer */}
+        <div className="flex flex-col items-center mb-10">
+          <div className="flex items-center gap-2 px-5 py-2 rounded-2xl bg-primary/10 border-2 border-primary/20 shadow-sm animate-pulse">
+            <Clock className="w-5 h-5 text-primary" />
+            <span className="text-primary font-mono font-bold text-2xl tracking-tighter">
+              {formatTime(elapsedTime)}
+            </span>
+          </div>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] mt-3 font-black opacity-70">
+            Time Elapsed
+          </span>
+        </div>
 
         {/* Force Cancel Button */}
         <button

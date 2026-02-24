@@ -36,6 +36,8 @@ export const BookGenerator: React.FC = () => {
     setCoverDownloadUrl,
     currentGenerationId,
     setCurrentGenerationId,
+    elapsedTime,
+    setElapsedTime,
     reset
   } = useBookStore();
 
@@ -44,6 +46,22 @@ export const BookGenerator: React.FC = () => {
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [generatedBlob, setGeneratedBlob] = useState<Blob | null>(null);
   const [showFinished, setShowFinished] = useState(false);
+
+  // Timer logic for generation
+  React.useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (isGenerating) {
+      setElapsedTime(0); // Reset timer at start
+      interval = setInterval(() => {
+        setElapsedTime((prev) => prev + 1);
+      }, 1000);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isGenerating, setElapsedTime]);
 
   // Prevention for accidental refresh during generation
   React.useEffect(() => {
@@ -85,6 +103,9 @@ export const BookGenerator: React.FC = () => {
   }, []);
 
   const handleGenerate = async () => {
+    // Safety guard: Don't allow multiple simultaneous calls
+    if (isGenerating) return;
+
     const validation = validateBookData(childName, selectedTheme?.id || null, uploadedPhoto);
     if (!validation.isValid) {
       showToast(validation.error || 'Please fill in all fields', 'error');

@@ -79,7 +79,7 @@ export async function startGenerationViaWebhook(
 }> {
   onProgress?.(5);
   const photoBase64 = await imageToBase64(photoFile);
-  onProgress?.(10);
+  onProgress?.(15);
 
   const payload = {
     childName: childName.trim(),
@@ -89,120 +89,35 @@ export async function startGenerationViaWebhook(
     photoMime: photoFile.type || 'image/jpeg',
   };
 
-  const N8N_WEBHOOK_URL = import.meta.env.VITE_N8N_WEBHOOK_URL || "https://wonderwrapslb.app.n8n.cloud/webhook/fff2b7a5bec-96be-4571-8c7c-aaec8d0934fc";
-
-  console.log('🚀 [GENERATOR] Sending request to n8n (Live Webhook):', payload.childName);
+  console.log('🚀 [GENERATOR] Sending request to Edge Function fallback...');
+  onProgress?.(25);
 
   let data: any;
-  let retryCount = 0;
-  const maxRetries = 5;
-
-  const makeRequest = async (): Promise<any> => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute timeout
-
-    try {
-      console.log(`📡 [N8N] Attempting request... (Attempt ${retryCount + 1}/${maxRetries + 1})`);
-      const response = await fetch(N8N_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      // Handle common retryable server errors
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => '');
-        console.error(`❌ [N8N] HTTP ${response.status}:`, errorText);
-
-        const isRetryable = [429, 502, 503, 504].includes(response.status);
-        if (isRetryable && retryCount < maxRetries) {
-          retryCount++;
-          const waitTime = retryCount * 10000; // 10s, 20s, 30s...
-          console.warn(`🔄 [RETRY] Server is busy (503/502). Waiting ${waitTime / 1000}s...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-          return makeRequest();
-        }
-
-        throw new Error(`Magic Server Error (${response.status}). The AI might be taking a break. Please try again soon.`);
-      }
-
-      const contentType = response.headers.get('Content-Type');
-
-      // Handle direct PDF response
-      if (contentType === 'application/pdf' || contentType?.includes('application/pdf')) {
-        console.log('📄 [N8N] Received direct PDF binary response');
-        const blob = await response.blob();
-        return { pdfBlob: blob };
-      }
-
-      const rawResponse = await response.text();
-      console.log('📥 [N8N] Raw response received (first 200 chars):', rawResponse.substring(0, 200));
-
-      try {
-        const parsed = JSON.parse(rawResponse);
-        // n8n sometimes wraps the response in an array
-        return Array.isArray(parsed) ? (parsed[0]?.body || parsed[0] || parsed) : (parsed.body || parsed);
-      } catch (e) {
-        // If it looks like a PDF binary but didn't have the right header
-        if (rawResponse.startsWith('%PDF')) {
-          console.log('📄 [N8N] Detected direct PDF binary response (via text fallback)');
-          // Convert text back to binary - this is risky but better than failing
-          const bytes = new Uint8Array(rawResponse.length);
-          for (let i = 0; i < rawResponse.length; i++) {
-            bytes[i] = rawResponse.charCodeAt(i) & 0xff;
-          }
-          return { pdfBlob: new Blob([bytes], { type: 'application/pdf' }) };
-        }
-        throw new Error('Received an unreadable response from the magic server.');
-      }
-    } catch (error: any) {
-      clearTimeout(timeoutId);
-
-      if (error.name === 'AbortError') {
-        throw new Error('The magic is taking is taking a bit too long. Please try again later.');
-      }
-
-      // Retry network errors (e.g. connection reset)
-      if (retryCount < maxRetries) {
-        retryCount++;
-        console.warn(`⚠️ [RETRY] Network issue. Retrying in 5s... (${retryCount}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        return makeRequest();
-      }
-      throw error;
-    }
-  };
-
   try {
-    data = await makeRequest();
-    console.log('📦 [N8N] Final data received:', data);
-  } catch (directError) {
-    console.warn('⚠️ [N8N] Standard webhook failed, trying magic fallback...', directError);
-
-    // Final fallback attempt via Edge Function
+    // We now use the Edge Function as the primary path to avoid CORS issues and multiple triggers
     const { data: edgeData, error } = await supabase.functions.invoke('generate-book', {
       body: payload,
     });
 
     if (error) {
-      console.error('❌ [EDGE] Fallback also failed:', error);
-
-      // If the error message indicates a non-2xx status, it's likely a validation or n8n error
+      console.error('❌ [EDGE] Generation failed:', error);
+      
+      // Handle non-2xx errors specifically
       if (error.message?.includes('non-2xx')) {
-        throw new Error('The magic service encountered an error while processing your book. Please try again in a few minutes.');
+        throw new Error('The magic service is currently busy processing other books. Please try again in a few minutes.');
       }
-
+      
       throw new Error(error.message || 'The magic service is currently unavailable.');
     }
 
     data = edgeData;
+    console.log('📦 [EDGE] Data received:', data);
+  } catch (err: any) {
+    console.error('🛑 [GENERATOR] Fatal error during generation:', err);
+    throw err;
   }
 
   // 1. Check for jobId or statusUrl indicating a long-running process
-  // Also check for status fields that indicate processing
   const isProcessing = data && (
     ['queued', 'running', 'processing', 'pending', 'waiting', 'started'].includes(data.status?.toLowerCase()) ||
     data.jobId ||
@@ -212,11 +127,11 @@ export async function startGenerationViaWebhook(
 
   if (isProcessing) {
     console.log('⏳ [POLL] Long task detected. Entering polling mode...');
-    onProgress?.(20);
+    onProgress?.(40);
     return pollGenerationStatus(data.statusUrl || data.jobId || data.id, onProgress);
   }
 
-  // 2. Direct PDF Blob (returned from direct fetch or Edge Function)
+  // 2. Direct PDF Blob (returned from Edge Function pass-through)
   if (data instanceof Blob) {
     onProgress?.(100);
     return { pdfBlob: data };

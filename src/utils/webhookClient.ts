@@ -92,10 +92,9 @@ export async function startGenerationViaWebhook(
   console.log('🚀 [GENERATOR] Sending request to Edge Function...');
   onProgress?.(25);
 
-  let data: any;
   try {
-    // We use the Edge Function as the primary path to avoid browser CORS and timeout issues
-    const { data: edgeData, error } = await supabase.functions.invoke('generate-book', {
+    // Calling the Edge Function which acts as a bridge to n8n
+    const { data, error } = await supabase.functions.invoke('generate-book', {
       body: payload,
     });
 
@@ -104,37 +103,38 @@ export async function startGenerationViaWebhook(
       throw new Error(error.message || 'The magic service is currently unavailable.');
     }
 
-    data = edgeData;
-    console.log('📦 [EDGE] Data received:', data);
+    onProgress?.(100);
+    console.log('📦 [EDGE] Data received successfully');
+
+    // 1. Handle Direct PDF Blob
+    if (data instanceof Blob) {
+      return { pdfBlob: data };
+    }
+
+    // 2. Handle JSON response
+    const s = Array.isArray(data) ? data[0] : data;
+    
+    // Check if the Edge Function returned base64 PDF
+    if (s.pdfBase64 || s.pdf_base64) {
+      const pdfBlob = base64ToBlob(s.pdfBase64 || s.pdf_base64, 'application/pdf');
+      return { 
+        pdfBlob, 
+        coverImageUrl: s.coverImageUrl || s.thumbnailUrl || s.image_url 
+      };
+    }
+
+    // Return the standard URLs
+    return {
+      pdfUrl: s.pdfUrl || s.url || s.pdf_url,
+      coverImageUrl: s.coverImageUrl || s.thumbnailUrl || s.image_url,
+      pdfDownloadUrl: s.pdfUrl || s.url || s.pdf_url,
+      coverDownloadUrl: s.coverImageUrl || s.image_url
+    };
+
   } catch (err: any) {
     console.error('🛑 [GENERATOR] Fatal error during generation:', err);
     throw err;
   }
-
-  onProgress?.(100);
-
-  // 1. Handle Direct PDF Blob
-  if (data instanceof Blob) {
-    return { pdfBlob: data };
-  }
-
-  // 2. Handle JSON response with URLs or Base64
-  const s = Array.isArray(data) ? data[0] : data;
-  
-  if (s.pdfBase64 || s.pdf_base64) {
-    const pdfBlob = base64ToBlob(s.pdfBase64 || s.pdf_base64, 'application/pdf');
-    return { 
-      pdfBlob, 
-      coverImageUrl: s.coverImageUrl || s.thumbnailUrl || s.image_url 
-    };
-  }
-
-  return {
-    pdfUrl: s.pdfUrl || s.url || s.pdf_url,
-    coverImageUrl: s.coverImageUrl || s.thumbnailUrl || s.image_url,
-    pdfDownloadUrl: s.pdfUrl || s.url || s.pdf_url,
-    coverDownloadUrl: s.coverImageUrl || s.image_url
-  };
 }
 
 /**

@@ -16,6 +16,7 @@ interface BookStore {
   currentGenerationId: string | null;
   photoName: string | null;
   elapsedTime: number; // in seconds
+  generationProgress: number; // 0-100
   setChildName: (name: string) => void;
   setSelectedTheme: (theme: Theme | null) => void;
   setUploadedPhoto: (photo: File | null) => void;
@@ -28,6 +29,7 @@ interface BookStore {
   setCoverDownloadUrl: (url: string | null) => void;
   setCurrentGenerationId: (id: string | null) => void;
   setElapsedTime: (time: number | ((prev: number) => number)) => void;
+  setGenerationProgress: (progress: number) => void;
   loadBook: (data: HistoryItem) => void;
   reset: () => void;
 }
@@ -48,6 +50,7 @@ export const useBookStore = create<BookStore>()(
       currentGenerationId: null,
       photoName: null,
       elapsedTime: 0,
+      generationProgress: 0,
       setChildName: (name) => set({ childName: name }),
       setSelectedTheme: (theme) => set({ selectedTheme: theme }),
       setUploadedPhoto: (photo) => set({ uploadedPhoto: photo, photoName: photo ? photo.name : null }),
@@ -59,9 +62,10 @@ export const useBookStore = create<BookStore>()(
       setPdfDownloadBlob: (blob) => set({ pdfDownloadBlob: blob }),
       setCoverDownloadUrl: (url) => set({ coverDownloadUrl: url }),
       setCurrentGenerationId: (id) => set({ currentGenerationId: id }),
-      setElapsedTime: (time) => set((state) => ({ 
-        elapsedTime: typeof time === 'function' ? time(state.elapsedTime) : time 
+      setElapsedTime: (time) => set((state) => ({
+        elapsedTime: typeof time === 'function' ? time(state.elapsedTime) : time
       })),
+      setGenerationProgress: (progress) => set({ generationProgress: progress }),
       loadBook: (data) => set({
         childName: data.childName,
         selectedTheme: { id: '', name: data.themeName, emoji: data.themeEmoji, description: '', colors: { primary: '', secondary: '', accent: '', background: '' } },
@@ -71,7 +75,8 @@ export const useBookStore = create<BookStore>()(
         coverDownloadUrl: data.coverDownloadUrl || null,
         isGenerating: false,
         currentGenerationId: null,
-        elapsedTime: 0
+        elapsedTime: 0,
+        generationProgress: 100
       }),
       reset: () => set({
         childName: '',
@@ -86,7 +91,8 @@ export const useBookStore = create<BookStore>()(
         coverDownloadUrl: null,
         currentGenerationId: null,
         photoName: null,
-        elapsedTime: 0
+        elapsedTime: 0,
+        generationProgress: 0
       })
     }),
     {

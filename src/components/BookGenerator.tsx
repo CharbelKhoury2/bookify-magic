@@ -22,6 +22,8 @@ export const BookGenerator: React.FC = () => {
     processedPhoto,
     isGenerating,
     setIsGenerating,
+    generationProgress,
+    setGenerationProgress,
     generatedPDF,
     setGeneratedPDF,
     coverImage,
@@ -93,7 +95,7 @@ export const BookGenerator: React.FC = () => {
           setCurrentGenerationId(null);
           showToast('The magic session took longer than expected. If it continues, please check your network or try again later.', 'error');
         }
-      }, 3600000); // 1 hour
+      }, 7200000); // 2 hours
 
       return () => clearTimeout(timer);
     }
@@ -115,6 +117,7 @@ export const BookGenerator: React.FC = () => {
     try {
       console.log('🚀 [UI] Starting generation process...');
       setIsGenerating(true);
+      setGenerationProgress(0);
       setCoverImage(null);
       setPdfDownloadUrl(null);
       setPdfDownloadBlob(null);
@@ -133,6 +136,7 @@ export const BookGenerator: React.FC = () => {
           uploadedPhoto,
           (p) => {
             console.log(`📊 [UI] Progress: ${p}%`);
+            setGenerationProgress(p);
           }
         );
       } catch (webhookError: any) {
@@ -141,6 +145,7 @@ export const BookGenerator: React.FC = () => {
       }
 
       console.log('✨ [UI] Webhook call finished, processing results...', result);
+      setGenerationProgress(98);
       const { pdfBlob, pdfUrl, coverImageUrl, pdfDownloadUrl: downloadPdfUrl, coverDownloadUrl: downloadCoverUrl } = result;
 
       // Update DB to completed
@@ -187,10 +192,15 @@ export const BookGenerator: React.FC = () => {
 
       console.log('🎉 [UI] Generation complete! Finalizing state.');
       setGeneratedPDF(finalPdfUrl);
-      setIsGenerating(false);
-      setCurrentGenerationId(null);
-      setShowFinished(true); // Show the success modal
-      showToast('Your magical book is ready!', 'success');
+      setGenerationProgress(100);
+
+      // Small delay to let the user see the 100% state and transition smoothly
+      setTimeout(() => {
+        setIsGenerating(false);
+        setCurrentGenerationId(null);
+        setShowFinished(true); // Show the success modal
+        showToast('Your magical book is ready!', 'success');
+      }, 1000);
     } catch (error) {
       console.error('🛑 [UI] Fatal Generation Error:', error);
 
@@ -200,6 +210,7 @@ export const BookGenerator: React.FC = () => {
       }
 
       setIsGenerating(false);
+      setGenerationProgress(0);
       setCurrentGenerationId(null);
       const message = error instanceof Error ? error.message : 'Failed to generate book. Please try again.';
       showToast(message, 'error');

@@ -96,13 +96,13 @@ export async function startGenerationViaWebhook(
 
   let data: any;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute timeout
+  const timeoutId = setTimeout(() => controller.abort(), 1800000); // 30 minute timeout
 
   try {
-    console.log(`📡 [N8N] Attempting DIRECT request... (Timeout: 10m)`);
+    console.log(`📡 [N8N] Attempting DIRECT request... (Timeout: 30m)`);
     const response = await fetch(N8N_WEBHOOK_URL, {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json, application/pdf'
       },
@@ -129,7 +129,7 @@ export async function startGenerationViaWebhook(
     }
 
     const rawResponse = await response.text();
-    
+
     if (!rawResponse || rawResponse.trim() === '') {
       console.warn('⚠️ [N8N] Received an empty response from server.');
       throw new Error('The magic server returned an empty response. Your book might still be processing, please check your library in a few minutes.');
@@ -157,7 +157,7 @@ export async function startGenerationViaWebhook(
   } catch (err: any) {
     clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
-      throw new Error('The magic is taking over 10 minutes. Please check your magical library later.');
+      throw new Error('The magic is taking over 30 minutes. Please check your magical library later.');
     }
     console.error('🛑 [GENERATOR] Fetch error:', err);
     throw err;
@@ -304,8 +304,10 @@ async function pollGenerationStatus(
         const data = await resp.json();
         const status: GenerationStatusResponse = Array.isArray(data) ? data[0] : data;
 
-        if (status.progress) {
-          onProgress?.(20 + (status.progress * 0.7)); // Scale progress to 20-90% range
+        if (status.progress !== undefined) {
+          // Scale from 25% (starting point of request) to 95%
+          const scaledProgress = 25 + (status.progress * 0.7);
+          onProgress?.(Math.min(95, Math.round(scaledProgress)));
         }
 
         if (status.status === 'completed') {

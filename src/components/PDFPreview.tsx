@@ -18,7 +18,8 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
     selectedTheme,
     pdfDownloadUrl,
     coverDownloadUrl,
-    elapsedTime
+    elapsedTime,
+    generationProgress
   } = useBookStore();
 
   const [isImageModalOpen, setIsImageModalOpen] = React.useState(false);

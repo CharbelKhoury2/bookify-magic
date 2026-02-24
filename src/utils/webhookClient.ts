@@ -320,7 +320,6 @@ async function pollGenerationStatus(
 
   throw new Error('Generation timed out after 10 minutes. Please check your magical library later.');
 }
-}
 
 function base64ToBlob(base64: string, mime: string) {
   const actualBase64 = base64.includes(',') ? base64.split(',')[1] : base64;

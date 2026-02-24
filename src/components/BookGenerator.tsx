@@ -95,6 +95,7 @@ export const BookGenerator: React.FC = () => {
 
     let generationId: string | null = null;
     try {
+      console.log('🚀 [UI] Starting generation process...');
       setIsGenerating(true);
       setGenerationProgress(0);
       setCoverImage(null);
@@ -106,12 +107,25 @@ export const BookGenerator: React.FC = () => {
       generationId = await logGenerationStart(childName.trim(), selectedTheme.id, selectedTheme.name);
       setCurrentGenerationId(generationId);
 
-      const { pdfBlob, pdfUrl, coverImageUrl, pdfDownloadUrl: downloadPdfUrl, coverDownloadUrl: downloadCoverUrl } = await startGenerationViaWebhook(
-        childName.trim(),
-        selectedTheme,
-        uploadedPhoto,
-        (p) => setGenerationProgress(p)
-      );
+      console.log('📡 [UI] Calling webhook client (Detailed)...');
+      let result;
+      try {
+        result = await startGenerationViaWebhook(
+          childName.trim(),
+          selectedTheme,
+          uploadedPhoto,
+          (p) => {
+            console.log(`📊 [UI] Progress: ${p}%`);
+            setGenerationProgress(p);
+          }
+        );
+      } catch (webhookError: any) {
+        console.error('🛑 [UI] Webhook execution failed:', webhookError);
+        throw webhookError; // Re-throw to be caught by the outer catch
+      }
+
+      console.log('✨ [UI] Webhook call finished, processing results...', result);
+      const { pdfBlob, pdfUrl, coverImageUrl, pdfDownloadUrl: downloadPdfUrl, coverDownloadUrl: downloadCoverUrl } = result;
 
       // Update DB to completed
       if (generationId) {
@@ -120,40 +134,31 @@ export const BookGenerator: React.FC = () => {
 
       let finalPdfUrl: string | null = null;
       if (pdfBlob) {
+        console.log('📄 [UI] PDF Blob received, creating local URL');
         const url = URL.createObjectURL(pdfBlob);
         finalPdfUrl = url;
         setGeneratedBlob(pdfBlob);
         setPdfDownloadBlob(pdfBlob);
       } else if (pdfUrl) {
+        console.log('📄 [UI] PDF URL received:', pdfUrl);
         finalPdfUrl = pdfUrl;
       }
 
-      if (!finalPdfUrl) throw new Error('No PDF returned from webhook');
+      if (!finalPdfUrl) {
+        console.error('❌ [UI] No PDF URL or Blob found in result object');
+        throw new Error('No PDF returned from webhook. Check the console for details.');
+      }
 
       if (coverImageUrl) {
         setCoverImage(coverImageUrl);
-        console.log('✅ Cover image set for preview:', coverImageUrl);
+        console.log('📸 [UI] Cover image set for preview:', coverImageUrl);
       }
 
       // Store download URLs for both files
-      if (downloadPdfUrl) {
-        setPdfDownloadUrl(downloadPdfUrl);
-        console.log('✅ PDF download URL stored:', downloadPdfUrl);
-      }
-      if (downloadCoverUrl) {
-        setCoverDownloadUrl(downloadCoverUrl);
-        console.log('✅ Cover download URL stored:', downloadCoverUrl);
-      }
+      if (downloadPdfUrl) setPdfDownloadUrl(downloadPdfUrl);
+      if (downloadCoverUrl) setCoverDownloadUrl(downloadCoverUrl);
 
-      // Log summary of what was received
-      console.log('📊 Generation complete - Files received:', {
-        hasPdfPreview: !!finalPdfUrl,
-        hasCoverPreview: !!coverImageUrl,
-        hasPdfDownload: !!downloadPdfUrl,
-        hasCoverDownload: !!downloadCoverUrl
-      });
-
-      // Save to history with download URLs
+      // Save to history
       addToHistory({
         childName: childName.trim(),
         themeName: selectedTheme.name,
@@ -164,13 +169,14 @@ export const BookGenerator: React.FC = () => {
         coverDownloadUrl: downloadCoverUrl
       });
 
+      console.log('🎉 [UI] Generation complete! Finalizing state.');
       setGeneratedPDF(finalPdfUrl);
       setIsGenerating(false);
       setGenerationProgress(100);
       setCurrentGenerationId(null);
       showToast('Your magical book is ready!', 'success');
     } catch (error) {
-      console.error('Generation error:', error);
+      console.error('🛑 [UI] Fatal Generation Error:', error);
 
       // Update DB to failed
       if (generationId) {

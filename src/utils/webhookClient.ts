@@ -91,42 +91,69 @@ export async function startGenerationViaWebhook(
 
   const N8N_WEBHOOK_URL = "https://wonderwrapslb.app.n8n.cloud/webhook-test/2b7a5bec-96be-4571-8c7c-aaec8d0934fc";
 
-  console.log('🚀 Sending book request directly to n8n cloud');
+  console.log('🚀 [GENERATOR] Sending request to n8n (Test Webhook):', payload.childName);
 
   let data: any;
   let retryCount = 0;
-  const maxRetries = 3;
+  const maxRetries = 5;
 
-  const makeRequest = async () => {
+  const makeRequest = async (): Promise<any> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute timeout
+
     try {
-      // Primary: Call n8n webhook directly
+      console.log(`📡 [N8N] Attempting request... (Attempt ${retryCount + 1}/${maxRetries + 1})`);
       const response = await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
+
+      // Handle common retryable server errors
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
-        console.error(`❌ n8n direct call failed (${response.status}):`, errorText);
+        console.error(`❌ [N8N] HTTP ${response.status}:`, errorText);
 
-        // Retry logic for capacity issues (503) or gateway errors (502)
-        if ((response.status === 503 || response.status === 502) && retryCount < maxRetries) {
+        const isRetryable = [429, 502, 503, 504].includes(response.status);
+        if (isRetryable && retryCount < maxRetries) {
           retryCount++;
-          console.log(`🔄 Capacity issue detected. Retrying in ${retryCount * 5} seconds... (Attempt ${retryCount}/${maxRetries})`);
-          await new Promise(resolve => setTimeout(resolve, retryCount * 5000));
+          const waitTime = retryCount * 10000; // 10s, 20s, 30s...
+          console.warn(`🔄 [RETRY] Server is busy (503/502). Waiting ${waitTime / 1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
           return makeRequest();
         }
 
-        throw new Error(`n8n returned status ${response.status}: ${errorText || 'Unknown error'}`);
+        throw new Error(`Magic Server Error (${response.status}). The AI might be taking a break. Please try again soon.`);
       }
 
-      return await response.json();
-    } catch (error) {
+      const rawResponse = await response.text();
+      console.log('📥 [N8N] Raw response received (first 200 chars):', rawResponse.substring(0, 200));
+
+      try {
+        return JSON.parse(rawResponse);
+      } catch (e) {
+        // If it looks like a PDF binary
+        if (rawResponse.startsWith('%PDF')) {
+          console.log('📄 [N8N] Detected direct PDF binary response');
+          return { pdfBlob: new Blob([new TextEncoder().encode(rawResponse)], { type: 'application/pdf' }) };
+        }
+        throw new Error('Received an unreadable response from the magic server.');
+      }
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+
+      if (error.name === 'AbortError') {
+        throw new Error('The magic is taking is taking a bit too long. Please try again later.');
+      }
+
+      // Retry network errors (e.g. connection reset)
       if (retryCount < maxRetries) {
         retryCount++;
-        console.log(`🔄 Network error. Retrying in ${retryCount * 5} seconds... (Attempt ${retryCount}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, retryCount * 5000));
+        console.warn(`⚠️ [RETRY] Network issue. Retrying in 5s... (${retryCount}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, 5000));
         return makeRequest();
       }
       throw error;
@@ -135,45 +162,43 @@ export async function startGenerationViaWebhook(
 
   try {
     data = await makeRequest();
-    console.log('📦 Received initial response from n8n:', data);
+    console.log('📦 [N8N] Final data received:', data);
   } catch (directError) {
-    console.warn('⚠️ Direct n8n call failed, falling back to edge function...', directError);
+    console.warn('⚠️ [N8N] Standard webhook failed, trying magic fallback...', directError);
 
-    // Fallback: Try through Supabase Edge Function
+    // Final fallback attempt via Edge Function
     const { data: edgeData, error } = await supabase.functions.invoke('generate-book', {
       body: payload,
     });
 
     if (error) {
-      console.error('❌ Edge function fallback also failed:', error);
-      throw new Error(error.message || 'Book generation service error');
+      console.error('❌ [EDGE] Fallback also failed:', error);
+      throw new Error(directError instanceof Error ? directError.message : 'The magic service is currently unavailable.');
     }
 
     data = edgeData;
-    console.log('📦 Received response from edge function fallback:', data);
   }
 
-  // Handle Polling if the backend returns a jobId or statusUrl
-  if (data.status === 'queued' || data.status === 'running' || data.jobId || data.statusUrl) {
-    console.log('⏳ Generation started but not complete. Entering polling mode...');
+  // 1. Check for jobId or statusUrl indicating a long-running process
+  if (data && (data.status === 'queued' || data.status === 'running' || data.jobId || data.statusUrl)) {
+    console.log('⏳ [POLL] Long task detected. Entering polling mode...');
     onProgress?.(20);
     return pollGenerationStatus(data.statusUrl || data.jobId, onProgress);
   }
 
+  // 2. Direct PDF Blob (often returned from the PDF helper)
   const start: GenerationStartResponse = data;
-
-  // If direct PDF binary response
-  if (start.pdfBlob) {
+  if (start && start.pdfBlob) {
     onProgress?.(100);
     return { pdfBlob: start.pdfBlob };
   }
 
-  // 1. Array-like response (common in n8n/multi-file uploads)
+  // 3. Array or Object with files (common in multi-upload responses)
   const s = start as any;
-  const items = Array.isArray(start) ? start : (s.files || s.items || (s.result && Array.isArray(s.result) ? s.result : null));
+  const items = Array.isArray(start) ? start : (s?.files || s?.items || (s?.result && Array.isArray(s.result) ? s.result : null));
 
   if (items && Array.isArray(items)) {
-    console.log('📦 Processing items from response:', items.length);
+    console.log(`📦 [N8N] Found ${items.length} items in response`);
     const pdfItem = items.find((item: any) =>
       (item.mimeType === 'application/pdf') ||
       (item.name?.toLowerCase().endsWith('.pdf')) ||
@@ -219,28 +244,29 @@ export async function startGenerationViaWebhook(
     }
   }
 
-  // 2. Synchronous response with explicit fields (direct or Base64)
-  const pdfUrl = s.pdfUrl || s.pdf_url || s.url || (typeof start === 'string' && (start as string).startsWith('http') ? start : undefined);
-  const pdfBase64 = s.pdfBase64 || s.pdf_base64 || s.pdf_data || s.data || (typeof start === 'string' && (start as string).length > 1000 ? start : undefined);
-  let coverImageUrl = s.coverImageUrl || s.cover_url || s.thumbnailUrl || s.image_url;
+  // 4. Standalone fields (pdfUrl, pdfBase64, etc.)
+  const pdfUrl = s?.pdfUrl || s?.pdf_url || s?.url || (typeof start === 'string' && (start as string).startsWith('http') ? start : undefined);
+  const pdfBase64 = s?.pdfBase64 || s?.pdf_base64 || s?.pdf_data || s?.data || (typeof start === 'string' && (start as string).length > 1000 ? start : undefined);
+  let coverImageUrl = s?.coverImageUrl || s?.cover_url || s?.thumbnailUrl || s?.image_url;
 
-  if (s.coverImageBase64 || s.cover_base64 || s.image_data) {
-    const b64 = s.coverImageBase64 || s.cover_base64 || s.image_data;
+  if (s?.coverImageBase64 || s?.cover_base64 || s?.image_data) {
+    const b64 = s?.coverImageBase64 || s?.cover_base64 || s?.image_data;
     coverImageUrl = `data:image/jpeg;base64,${b64.replace(/^data:image\/[a-z]+;base64,/, '')}`;
   }
 
   if (pdfBase64 || pdfUrl) {
     onProgress?.(90);
     if (pdfBase64) {
-      const pdfBlob = base64ToBlob(pdfBase64, 'application/pdf');
+      const pdfBlob = base64ToBlob(pdfBase64 as string, 'application/pdf');
       onProgress?.(100);
       return { pdfBlob, coverImageUrl };
     }
     onProgress?.(100);
-    return { pdfUrl, coverImageUrl };
+    return { pdfUrl, coverImageUrl: coverImageUrl as string };
   }
 
-  throw new Error('No PDF was returned from the book generation service. The AI might still be working or encountered an error.');
+  console.error('🛑 [N8N] Could not extract PDF from response:', data);
+  throw new Error('Your book was created, but we had trouble retrieving the file. Please check your history in a few moments.');
 }
 
 /**

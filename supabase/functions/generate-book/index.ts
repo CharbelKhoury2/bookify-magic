@@ -109,6 +109,7 @@ Deno.serve(async (req) => {
       photoMime,
     };
 
+    console.log(`📡 [EDGE] Forwarding request to n8n...`);
     const n8nRes = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -116,19 +117,51 @@ Deno.serve(async (req) => {
     });
 
     if (!n8nRes.ok) {
-      const text = await n8nRes.text().catch(() => "");
-      console.error(`n8n error ${n8nRes.status}: ${text}`);
+      const errorText = await n8nRes.text().catch(() => "Unknown n8n error");
+      console.error(`❌ [EDGE] n8n error ${n8nRes.status}: ${errorText}`);
       return new Response(
-        JSON.stringify({ error: "Book generation service error" }),
+        JSON.stringify({ error: "The book generation service is currently busy.", details: errorText }),
         {
-          status: 502,
+          status: n8nRes.status, // Forward the actual status code
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
 
-    const result = await n8nRes.json();
-    return new Response(JSON.stringify(result), {
+    const contentType = n8nRes.headers.get("Content-Type") || "";
+    console.log(`📥 [EDGE] n8n responded with Content-Type: ${contentType}`);
+    
+    // 1. Handle PDF directly as a stream/arrayBuffer for memory efficiency
+    if (contentType.includes("application/pdf")) {
+      const pdfBuffer = await n8nRes.arrayBuffer();
+      return new Response(pdfBuffer, {
+        headers: { 
+          ...corsHeaders, 
+          "Content-Type": "application/pdf",
+          "Content-Length": pdfBuffer.byteLength.toString(),
+          "Content-Disposition": `attachment; filename="book.pdf"`
+        },
+      });
+    }
+
+    // 2. Handle JSON or other responses
+    const rawResult = await n8nRes.text();
+    
+    // Fallback check: if it's a PDF but n8n didn't set the header correctly
+    if (rawResult.startsWith("%PDF")) {
+      console.log("📄 [EDGE] Detected PDF via magic bytes (header was missing)");
+      // Convert text back to bytes efficiently
+      const bytes = new Uint8Array(rawResult.length);
+      for (let i = 0; i < rawResult.length; i++) {
+        bytes[i] = rawResult.charCodeAt(i) & 0xff;
+      }
+      return new Response(bytes, {
+        headers: { ...corsHeaders, "Content-Type": "application/pdf" },
+      });
+    }
+
+    // Return JSON as is
+    return new Response(rawResult, {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {

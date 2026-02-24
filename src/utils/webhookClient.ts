@@ -189,7 +189,13 @@ export async function startGenerationViaWebhook(
 
     if (error) {
       console.error('❌ [EDGE] Fallback also failed:', error);
-      throw new Error(directError instanceof Error ? directError.message : 'The magic service is currently unavailable.');
+      
+      // If the error message indicates a non-2xx status, it's likely a validation or n8n error
+      if (error.message?.includes('non-2xx')) {
+        throw new Error('The magic service encountered an error while processing your book. Please try again in a few minutes.');
+      }
+      
+      throw new Error(error.message || 'The magic service is currently unavailable.');
     }
 
     data = edgeData;
@@ -210,7 +216,12 @@ export async function startGenerationViaWebhook(
     return pollGenerationStatus(data.statusUrl || data.jobId || data.id, onProgress);
   }
 
-  // 2. Direct PDF Blob (often returned from the PDF helper)
+  // 2. Direct PDF Blob (returned from direct fetch or Edge Function)
+  if (data instanceof Blob) {
+    onProgress?.(100);
+    return { pdfBlob: data };
+  }
+
   const start: GenerationStartResponse = data;
   if (start && start.pdfBlob) {
     onProgress?.(100);

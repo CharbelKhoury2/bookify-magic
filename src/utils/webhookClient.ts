@@ -79,14 +79,9 @@ export async function startGenerationViaWebhook(
 }> {
   onProgress?.(5);
   const photoBase64 = await imageToBase64(photoFile);
-  onProgress?.(10);
-
-  // 1. Log the start in DB to get the ID for n8n
-  const generationId = await logGenerationStart(childName.trim(), theme.id, theme.name);
-  if (!generationId) throw new Error("Failed to initialize generation in database.");
+  onProgress?.(15);
 
   const payload = {
-    generationId,
     childName: childName.trim(),
     themeId: theme.id,
     themeName: theme.name,
@@ -94,119 +89,52 @@ export async function startGenerationViaWebhook(
     photoMime: photoFile.type || 'image/jpeg',
   };
 
-  const N8N_WEBHOOK_URL = "https://wonderwrapslb.app.n8n.cloud/webhook/2b7a5bec-96be-4571-8c7c-aaec8d0934fc";
+  console.log('🚀 [GENERATOR] Sending request to Edge Function...');
+  onProgress?.(25);
 
-  console.log('🚀 [GENERATOR] Calling n8n and starting DB monitor...');
-  onProgress?.(20);
+  let data: any;
+  try {
+    // We use the Edge Function as the primary path to avoid browser CORS and timeout issues
+    const { data: edgeData, error } = await supabase.functions.invoke('generate-book', {
+      body: payload,
+    });
 
-  // Define the n8n request as a separate promise
-  const n8nRequest = async () => {
-    try {
-      const response = await fetch(N8N_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw new Error(`n8n error (${response.status})`);
-      }
-
-      const contentType = response.headers.get('Content-Type');
-      if (contentType?.includes('application/pdf')) {
-        const blob = await response.blob();
-        return { pdfBlob: blob };
-      }
-
-      const text = await response.text();
-      if (!text || text.trim() === "") return null;
-
-      try {
-        const data = JSON.parse(text);
-        const s = Array.isArray(data) ? data[0] : data;
-        return {
-          pdfUrl: s.pdfUrl || s.url || s.pdf_url,
-          coverImageUrl: s.coverImageUrl || s.thumbnailUrl || s.image_url,
-          pdfDownloadUrl: s.pdfUrl || s.url || s.pdf_url,
-          coverDownloadUrl: s.coverImageUrl || s.image_url
-        };
-      } catch (e) {
-        if (text.startsWith('%PDF')) {
-          const bytes = new Uint8Array(text.length);
-          for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i) & 0xff;
-          return { pdfBlob: new Blob([bytes], { type: 'application/pdf' }) };
-        }
-        return null;
-      }
-    } catch (e) {
-      console.warn('📡 [N8N] Webhook connection dropped or failed:', e);
-      return null; // Don't throw, let the DB monitor handle it
+    if (error) {
+      console.error('❌ [EDGE] Generation failed:', error);
+      throw new Error(error.message || 'The magic service is currently unavailable.');
     }
-  };
 
-  // Define the DB watcher as a separate promise
-  const dbWatcher = async () => {
-    const maxAttempts = 120; // 20 minutes
-    let attempts = 0;
-    
-    console.log('⏳ [DB] Waiting 10 seconds before first check...');
-    await new Promise(r => setTimeout(r, 10000)); // Initial 10s wait as requested
-
-    while (attempts < maxAttempts) {
-      attempts++;
-      
-      // Artificial progress while waiting
-      if (attempts < 100) onProgress?.(Math.min(95, 20 + (attempts * 0.5)));
-
-      try {
-        const { data, error } = await supabase
-          .from('book_generations')
-          .select('*')
-          .eq('id', generationId)
-          .single();
-
-        if (!error && data) {
-          if (data.status === 'completed') {
-            console.log('✅ [DB] Status marked as completed!');
-            return data;
-          }
-          if (data.status === 'failed') {
-            throw new Error(data.error_message || 'The AI magic encountered an issue.');
-          }
-        }
-      } catch (e) {
-        console.warn('🔍 [DB] Poll failed, retrying...', e);
-      }
-      await new Promise(r => setTimeout(r, 10000)); // Poll every 10s
-    }
-    throw new Error('Generation timed out. Please check your library later.');
-  };
-
-  // EXECUTION LOGIC:
-  // We start n8nRequest, but we rely on dbWatcher to tell us when it's truly done.
-  const n8nPromise = n8nRequest();
-  const dbResult = await dbWatcher();
-
-  // Once DB says "completed", we check if the n8n request gave us data
-  const n8nResult = await n8nPromise;
-
-  if (n8nResult && (n8nResult.pdfBlob || n8nResult.pdfUrl)) {
-    onProgress?.(100);
-    return n8nResult;
+    data = edgeData;
+    console.log('📦 [EDGE] Data received:', data);
+  } catch (err: any) {
+    console.error('🛑 [GENERATOR] Fatal error during generation:', err);
+    throw err;
   }
 
-  // If n8n connection dropped but DB says completed, check if DB has the URLs
-  if (dbResult.pdf_url || dbResult.generated_pdf_url) {
-    onProgress?.(100);
-    return {
-      pdfUrl: dbResult.pdf_url || dbResult.generated_pdf_url,
-      coverImageUrl: dbResult.thumbnail_url || dbResult.cover_image_url,
-      pdfDownloadUrl: dbResult.pdf_url || dbResult.generated_pdf_url,
+  onProgress?.(100);
+
+  // 1. Handle Direct PDF Blob
+  if (data instanceof Blob) {
+    return { pdfBlob: data };
+  }
+
+  // 2. Handle JSON response with URLs or Base64
+  const s = Array.isArray(data) ? data[0] : data;
+  
+  if (s.pdfBase64 || s.pdf_base64) {
+    const pdfBlob = base64ToBlob(s.pdfBase64 || s.pdf_base64, 'application/pdf');
+    return { 
+      pdfBlob, 
+      coverImageUrl: s.coverImageUrl || s.thumbnailUrl || s.image_url 
     };
   }
 
-  // Final fallback: If DB says completed but we have no URLs anywhere
-  throw new Error('Your book is ready! You can find it in your "My Library" section.');
+  return {
+    pdfUrl: s.pdfUrl || s.url || s.pdf_url,
+    coverImageUrl: s.coverImageUrl || s.thumbnailUrl || s.image_url,
+    pdfDownloadUrl: s.pdfUrl || s.url || s.pdf_url,
+    coverDownloadUrl: s.coverImageUrl || s.image_url
+  };
 }
 
 /**

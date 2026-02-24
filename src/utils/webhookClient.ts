@@ -89,52 +89,189 @@ export async function startGenerationViaWebhook(
     photoMime: photoFile.type || 'image/jpeg',
   };
 
-  console.log('🚀 [GENERATOR] Sending request to Edge Function...');
+  const N8N_WEBHOOK_URL = import.meta.env.VITE_N8N_WEBHOOK_URL || "https://wonderwrapslb.app.n8n.cloud/webhook/2b7a5bec-96be-4571-8c7c-aaec8d0934fc";
+  const N8N_API_KEY = import.meta.env.VITE_N8N_API_KEY;
+  const N8N_BASE_URL = import.meta.env.VITE_N8N_BASE_URL || "https://wonderwrapslb.app.n8n.cloud";
+
+  console.log('🚀 [GENERATOR] Triggering n8n workflow...');
   onProgress?.(25);
 
   try {
-    // Calling the Edge Function which acts as a bridge to n8n
-    const { data, error } = await supabase.functions.invoke('generate-book', {
-      body: payload,
+    // 1. Trigger the workflow
+    // The webhook should be configured to respond immediately with {"executionId": "..."}
+    const response = await fetch(N8N_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     });
 
-    if (error) {
-      console.error('❌ [EDGE] Generation failed:', error);
-      throw new Error(error.message || 'The magic service is currently unavailable.');
+    if (!response.ok) {
+      throw new Error(`Failed to trigger workflow (${response.status})`);
     }
 
-    onProgress?.(100);
-    console.log('📦 [EDGE] Data received successfully');
+    const triggerData = await response.json();
+    const executionId = triggerData.executionId || triggerData.id;
 
-    // 1. Handle Direct PDF Blob
-    if (data instanceof Blob) {
-      return { pdfBlob: data };
+    if (!executionId) {
+      console.warn('⚠️ [GENERATOR] No executionId received. n8n might not be set to respond immediately.');
+      throw new Error('Server did not provide an execution ID. Please check n8n settings.');
     }
 
-    // 2. Handle JSON response
-    const s = Array.isArray(data) ? data[0] : data;
-    
-    // Check if the Edge Function returned base64 PDF
-    if (s.pdfBase64 || s.pdf_base64) {
-      const pdfBlob = base64ToBlob(s.pdfBase64 || s.pdf_base64, 'application/pdf');
-      return { 
-        pdfBlob, 
-        coverImageUrl: s.coverImageUrl || s.thumbnailUrl || s.image_url 
-      };
-    }
+    console.log(`📡 [GENERATOR] Workflow started. Execution ID: ${executionId}`);
+    onProgress?.(30);
 
-    // Return the standard URLs
-    return {
-      pdfUrl: s.pdfUrl || s.url || s.pdf_url,
-      coverImageUrl: s.coverImageUrl || s.thumbnailUrl || s.image_url,
-      pdfDownloadUrl: s.pdfUrl || s.url || s.pdf_url,
-      coverDownloadUrl: s.coverImageUrl || s.image_url
-    };
+    // 2. Start Polling the n8n Public API
+    return pollN8nExecution(executionId, N8N_BASE_URL, N8N_API_KEY, onProgress);
 
   } catch (err: any) {
-    console.error('🛑 [GENERATOR] Fatal error during generation:', err);
+    console.error('🛑 [GENERATOR] Fatal Error:', err);
     throw err;
   }
+}
+
+/**
+ * Polls the n8n Public API for execution status and extracts results from runData
+ */
+async function pollN8nExecution(
+  executionId: string,
+  baseUrl: string,
+  apiKey: string,
+  onProgress?: (p: number) => void
+): Promise<any> {
+  if (!apiKey) {
+    throw new Error("n8n API Key is missing. Please set VITE_N8N_API_KEY.");
+  }
+
+  const maxAttempts = 120; // 20 minutes (10s intervals)
+  let attempts = 0;
+
+  console.log(`🔍 [POLL] Monitoring n8n execution: ${executionId}`);
+
+  while (attempts < maxAttempts) {
+    attempts++;
+    
+    // Artificial progress to keep user engaged (scales from 30% to 95%)
+    if (attempts < 100) {
+      onProgress?.(Math.min(95, 30 + (attempts * 0.6)));
+    }
+
+    try {
+      const response = await fetch(`${baseUrl}/api/v1/executions/${executionId}`, {
+        headers: { 'X-N8N-API-KEY': apiKey }
+      });
+
+      if (!response.ok) {
+        console.warn(`⚠️ [POLL] API check failed (${response.status}). Retrying...`);
+      } else {
+        const data = await response.json();
+
+        // Check if finished
+        if (data.finished || data.status === 'success') {
+          console.log('✅ [POLL] Execution finished! Extracting data...');
+          
+          const runData = data.data?.resultData?.runData || {};
+          const extractedStories: string[] = [];
+          const extractedCovers: string[] = [];
+
+          // Scan all nodes for the specific naming convention provided by user
+          Object.keys(runData).forEach(nodeName => {
+            const nodeOutput = runData[nodeName]?.[0]?.data?.main?.[0]?.json;
+            if (nodeOutput?.webViewLink || nodeOutput?.url) {
+              const link = nodeOutput.webViewLink || nodeOutput.url;
+              if (nodeName.startsWith('Upload Story Cover')) {
+                extractedCovers.push(link);
+              } else if (nodeName.startsWith('Upload Story')) {
+                extractedStories.push(link);
+              }
+            }
+          });
+
+          if (extractedStories.length === 0) {
+            console.warn('⚠️ [POLL] Finished but no Story link found in runData nodes.');
+          }
+
+          onProgress?.(100);
+          return {
+            pdfUrl: extractedStories[0] || '',
+            coverImageUrl: extractedCovers[0] || '',
+            pdfDownloadUrl: extractedStories[0] || '',
+            coverDownloadUrl: extractedCovers[0] || '',
+            allStories: extractedStories,
+            allCovers: extractedCovers
+          };
+        }
+
+        if (data.status === 'failed' || data.status === 'error') {
+          throw new Error('The AI workflow encountered an error in n8n.');
+        }
+      }
+    } catch (e: any) {
+      if (e.message?.includes('AI workflow encountered an error')) throw e;
+      console.warn('🔍 [POLL] Error checking status:', e);
+    }
+
+    // Wait 10 seconds before next poll
+    await new Promise(resolve => setTimeout(resolve, 10000));
+  }
+
+  throw new Error('Generation timed out after 20 minutes. Please check your library later.');
+}
+
+/**
+ * Monitors the database for the new book to appear
+ */
+async function monitorLibraryForResult(
+  childName: string,
+  themeName: string,
+  onProgress?: (p: number) => void
+): Promise<any> {
+  const maxAttempts = 120; // 20 minutes (10s intervals)
+  let attempts = 0;
+
+  while (attempts < maxAttempts) {
+    attempts++;
+    
+    // Artificial progress to keep the user excited
+    if (attempts < 100) {
+      onProgress?.(Math.min(99, 25 + (attempts * 0.6)));
+    }
+
+    try {
+      // Check the latest generations for this child
+      const { data, error } = await supabase
+        .from('book_generations')
+        .select('*')
+        .eq('child_name', childName)
+        .eq('theme_name', themeName)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (!error && data && data.length > 0) {
+        const book = data[0];
+        
+        // If n8n has updated the status to completed
+        if (book.status === 'completed' || book.pdf_url || book.generated_pdf_url) {
+          console.log('✅ [WATCHER] Magic complete! Opening book...');
+          onProgress?.(100);
+          return {
+            pdfUrl: book.pdf_url || book.generated_pdf_url,
+            coverImageUrl: book.thumbnail_url || book.cover_image_url,
+            pdfDownloadUrl: book.pdf_url || book.generated_pdf_url,
+          };
+        }
+
+        if (book.status === 'failed') {
+          throw new Error('The AI encountered a hiccup. Please try again.');
+        }
+      }
+    } catch (e) {
+      console.warn('🔍 [WATCHER] Library check failed, retrying...', e);
+    }
+
+    await new Promise(r => setTimeout(r, 10000)); // Wait 10s between checks
+  }
+
+  throw new Error('The magic is taking longer than usual. Please check your "My Library" section in a few minutes.');
 }
 
 /**

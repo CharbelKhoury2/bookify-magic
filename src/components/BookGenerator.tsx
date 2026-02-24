@@ -174,6 +174,7 @@ export const BookGenerator: React.FC = () => {
       setIsGenerating(false);
       setGenerationProgress(100);
       setCurrentGenerationId(null);
+      setShowFinished(true); // Show the success modal
       showToast('Your magical book is ready!', 'success');
     } catch (error) {
       console.error('🛑 [UI] Fatal Generation Error:', error);

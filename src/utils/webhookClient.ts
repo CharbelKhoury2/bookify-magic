@@ -129,16 +129,32 @@ export async function startGenerationViaWebhook(
         throw new Error(`Magic Server Error (${response.status}). The AI might be taking a break. Please try again soon.`);
       }
 
+      const contentType = response.headers.get('Content-Type');
+      
+      // Handle direct PDF response
+      if (contentType === 'application/pdf' || contentType?.includes('application/pdf')) {
+        console.log('📄 [N8N] Received direct PDF binary response');
+        const blob = await response.blob();
+        return { pdfBlob: blob };
+      }
+
       const rawResponse = await response.text();
       console.log('📥 [N8N] Raw response received (first 200 chars):', rawResponse.substring(0, 200));
 
       try {
-        return JSON.parse(rawResponse);
+        const parsed = JSON.parse(rawResponse);
+        // n8n sometimes wraps the response in an array
+        return Array.isArray(parsed) ? (parsed[0]?.body || parsed[0] || parsed) : (parsed.body || parsed);
       } catch (e) {
-        // If it looks like a PDF binary
+        // If it looks like a PDF binary but didn't have the right header
         if (rawResponse.startsWith('%PDF')) {
-          console.log('📄 [N8N] Detected direct PDF binary response');
-          return { pdfBlob: new Blob([new TextEncoder().encode(rawResponse)], { type: 'application/pdf' }) };
+          console.log('📄 [N8N] Detected direct PDF binary response (via text fallback)');
+          // Convert text back to binary - this is risky but better than failing
+          const bytes = new Uint8Array(rawResponse.length);
+          for (let i = 0; i < rawResponse.length; i++) {
+            bytes[i] = rawResponse.charCodeAt(i) & 0xff;
+          }
+          return { pdfBlob: new Blob([bytes], { type: 'application/pdf' }) };
         }
         throw new Error('Received an unreadable response from the magic server.');
       }
@@ -180,10 +196,18 @@ export async function startGenerationViaWebhook(
   }
 
   // 1. Check for jobId or statusUrl indicating a long-running process
-  if (data && (data.status === 'queued' || data.status === 'running' || data.jobId || data.statusUrl)) {
+  // Also check for status fields that indicate processing
+  const isProcessing = data && (
+    ['queued', 'running', 'processing', 'pending', 'waiting', 'started'].includes(data.status?.toLowerCase()) || 
+    data.jobId || 
+    data.statusUrl ||
+    (data.message?.toLowerCase().includes('started') && !data.pdfUrl && !data.pdfBase64)
+  );
+
+  if (isProcessing) {
     console.log('⏳ [POLL] Long task detected. Entering polling mode...');
     onProgress?.(20);
-    return pollGenerationStatus(data.statusUrl || data.jobId, onProgress);
+    return pollGenerationStatus(data.statusUrl || data.jobId || data.id, onProgress);
   }
 
   // 2. Direct PDF Blob (often returned from the PDF helper)
@@ -213,7 +237,12 @@ export async function startGenerationViaWebhook(
       (item.name?.toLowerCase().includes('thumb'))
     );
 
-    const pdfData = extractFileData(pdfItem || (pdfItem === undefined ? items.find((i: any) => extractFileData(i).url || extractFileData(i).base64) : null));
+    const pdfData = extractFileData(pdfItem || (pdfItem === undefined ? items.find((i: any) => {
+      const extracted = extractFileData(i);
+      return (extracted.url?.toLowerCase().endsWith('.pdf')) || 
+             (extracted.base64?.startsWith('data:application/pdf')) ||
+             (extracted.blob?.type === 'application/pdf');
+    }) : null));
     const coverData = extractFileData(coverItem);
 
     if (pdfData.url || pdfData.base64 || pdfData.blob) {
@@ -348,13 +377,18 @@ async function pollGenerationStatus(
 }
 
 function base64ToBlob(base64: string, mime: string) {
-  const actualBase64 = base64.includes(',') ? base64.split(',')[1] : base64;
-  const byteChars = atob(actualBase64);
-  const byteNumbers = new Array(byteChars.length);
-  for (let i = 0; i < byteChars.length; i++) {
-    byteNumbers[i] = byteChars.charCodeAt(i);
+  try {
+    const actualBase64 = base64.includes(',') ? base64.split(',')[1] : base64.trim();
+    const byteChars = atob(actualBase64);
+    const byteNumbers = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) {
+      byteNumbers[i] = byteChars.charCodeAt(i);
+    }
+    return new Blob([byteNumbers], { type: mime });
+  } catch (e) {
+    console.error('❌ Failed to convert base64 to blob:', e);
+    throw new Error('Failed to process the book file. The data might be corrupted.');
   }
-  return new Blob([new Uint8Array(byteNumbers)], { type: mime });
 }
 
 /**

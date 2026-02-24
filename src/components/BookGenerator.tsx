@@ -70,14 +70,15 @@ export const BookGenerator: React.FC = () => {
       showToast('Magic is still in progress! Please wait...', 'info');
 
       // Safety timeout: If it stays "generating" for too long without a result, reset it
+      // Increased to 1 hour to accommodate very long AI generations
       const timer = setTimeout(() => {
         if (isGenerating) {
           setIsGenerating(false);
           setGenerationProgress(0);
           setCurrentGenerationId(null);
-          showToast('The magic session timed out. Please try again.', 'error');
+          showToast('The magic session took longer than expected. If it continues, please check your network or try again later.', 'error');
         }
-      }, 180000); // 3 minutes
+      }, 3600000); // 1 hour
 
       return () => clearTimeout(timer);
     }

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { BookOpen, Mail, Lock, User, Sparkles, Star, Eye, EyeOff, UserCircle } from 'lucide-react';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
-import { Checkbox } from '@/components/ui/checkbox';
+
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -11,7 +11,7 @@ export default function Auth() {
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [acceptTerms, setAcceptTerms] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -38,9 +38,7 @@ export default function Auth() {
         if (password !== confirmPassword) {
           throw new Error('Passwords do not match');
         }
-        if (!acceptTerms) {
-          throw new Error('You must accept the terms and conditions');
-        }
+
 
         const { error } = await supabase.auth.signUp({
           email,
@@ -201,22 +199,7 @@ export default function Auth() {
               </div>
             )}
 
-            {!isLogin && (
-              <div className="flex items-start space-x-3 ml-1 animate-fade-in">
-                <Checkbox
-                  id="terms"
-                  checked={acceptTerms}
-                  onCheckedChange={(checked) => setAcceptTerms(checked as boolean)}
-                  className="mt-1 border-primary/50 data-[state=checked]:bg-primary"
-                />
-                <label
-                  htmlFor="terms"
-                  className="text-xs font-medium text-muted-foreground cursor-pointer leading-tight"
-                >
-                  I agree to the <span className="text-primary hover:underline cursor-pointer">Terms of Service</span> and <span className="text-primary hover:underline cursor-pointer">Privacy Policy</span>.
-                </label>
-              </div>
-            )}
+
 
 
 

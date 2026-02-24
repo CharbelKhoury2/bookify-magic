@@ -94,23 +94,48 @@ export async function startGenerationViaWebhook(
   console.log('🚀 Sending book request directly to n8n cloud');
 
   let data: any;
+  let retryCount = 0;
+  const maxRetries = 3;
+
+  const makeRequest = async () => {
+    try {
+      // Primary: Call n8n webhook directly
+      const response = await fetch(N8N_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        console.error(`❌ n8n direct call failed (${response.status}):`, errorText);
+
+        // Retry logic for capacity issues (503) or gateway errors (502)
+        if ((response.status === 503 || response.status === 502) && retryCount < maxRetries) {
+          retryCount++;
+          console.log(`🔄 Capacity issue detected. Retrying in ${retryCount * 5} seconds... (Attempt ${retryCount}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, retryCount * 5000));
+          return makeRequest();
+        }
+
+        throw new Error(`n8n returned status ${response.status}: ${errorText || 'Unknown error'}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      if (retryCount < maxRetries) {
+        retryCount++;
+        console.log(`🔄 Network error. Retrying in ${retryCount * 5} seconds... (Attempt ${retryCount}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, retryCount * 5000));
+        return makeRequest();
+      }
+      throw error;
+    }
+  };
 
   try {
-    // Primary: Call n8n webhook directly
-    const response = await fetch(N8N_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => '');
-      console.error(`❌ n8n direct call failed (${response.status}):`, errorText);
-      throw new Error(`n8n returned status ${response.status}`);
-    }
-
-    data = await response.json();
-    console.log('📦 Received response directly from n8n:', data);
+    data = await makeRequest();
+    console.log('📦 Received initial response from n8n:', data);
   } catch (directError) {
     console.warn('⚠️ Direct n8n call failed, falling back to edge function...', directError);
 
@@ -128,6 +153,13 @@ export async function startGenerationViaWebhook(
     console.log('📦 Received response from edge function fallback:', data);
   }
 
+  // Handle Polling if the backend returns a jobId or statusUrl
+  if (data.status === 'queued' || data.status === 'running' || data.jobId || data.statusUrl) {
+    console.log('⏳ Generation started but not complete. Entering polling mode...');
+    onProgress?.(20);
+    return pollGenerationStatus(data.statusUrl || data.jobId, onProgress);
+  }
+
   const start: GenerationStartResponse = data;
 
   // If direct PDF binary response
@@ -142,17 +174,6 @@ export async function startGenerationViaWebhook(
 
   if (items && Array.isArray(items)) {
     console.log('📦 Processing items from response:', items.length);
-    console.log('📦 Raw items:', JSON.stringify(items.map((i: any) => ({
-      name: i.name,
-      mimeType: i.mimeType,
-      id: i.id,
-      hasThumbnail: i.hasThumbnail,
-      thumbnailLink: i.thumbnailLink,
-      webViewLink: i.webViewLink,
-      webContentLink: i.webContentLink,
-      shared: i.shared
-    })), null, 2));
-
     const pdfItem = items.find((item: any) =>
       (item.mimeType === 'application/pdf') ||
       (item.name?.toLowerCase().endsWith('.pdf')) ||
@@ -167,15 +188,10 @@ export async function startGenerationViaWebhook(
       (item.name?.toLowerCase().includes('thumb'))
     );
 
-    console.log('🖼️ Cover item found:', coverItem ? { name: coverItem.name, mimeType: coverItem.mimeType, id: coverItem.id, thumbnailLink: coverItem.thumbnailLink, shared: coverItem.shared } : 'NONE');
-
     const pdfData = extractFileData(pdfItem || (pdfItem === undefined ? items.find((i: any) => extractFileData(i).url || extractFileData(i).base64) : null));
     const coverData = extractFileData(coverItem);
 
-    console.log('🖼️ Cover data extracted:', JSON.stringify(coverData));
-
     if (pdfData.url || pdfData.base64 || pdfData.blob) {
-      console.log('🎉 Successfully extracted final data from items');
       onProgress?.(100);
 
       let pdfBlob = pdfData.blob;
@@ -183,49 +199,23 @@ export async function startGenerationViaWebhook(
         pdfBlob = base64ToBlob(pdfData.base64, 'application/pdf');
       }
 
-      // Determine best cover image URL with multiple fallback strategies
       let coverImageUrl = coverData.previewUrl || coverData.url;
-
       if (!coverImageUrl && coverData.base64) {
         coverImageUrl = `data:image/jpeg;base64,${coverData.base64.replace(/^data:image\/[a-z]+;base64,/, '')}`;
       }
 
-      // If we have a Google Drive cover item, try multiple URL strategies
       if (coverItem?.id && coverItem?.kind === 'drive#file') {
         const driveId = coverItem.id;
-        // Strategy priority for Google Drive images:
-        // 1. Signed thumbnail link from API (best but may expire)
-        // 2. Direct export URL
-        // 3. Thumbnail endpoint (requires public sharing)
-        const candidateUrls = [
-          coverItem.thumbnailLink?.replace(/=s\d+$/, '=s1000'),
-          `https://drive.google.com/thumbnail?id=${driveId}&sz=w1000`,
-          `https://lh3.googleusercontent.com/d/${driveId}=s1000`,
-          coverItem.webContentLink,
-        ].filter(Boolean);
-
-        console.log('🖼️ Cover image URL candidates:', candidateUrls);
-        coverImageUrl = candidateUrls[0] || coverImageUrl;
+        coverImageUrl = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1000`;
       }
 
-      const result = {
+      return {
         pdfUrl: pdfData.previewUrl || pdfData.url,
         pdfBlob: pdfBlob,
         coverImageUrl,
         pdfDownloadUrl: pdfData.downloadUrl || pdfData.url,
         coverDownloadUrl: coverData.downloadUrl || coverData.url
       };
-
-      console.log('✨ Final extracted file data:', {
-        hasPdf: !!result.pdfUrl || !!result.pdfBlob,
-        hasCover: !!result.coverImageUrl,
-        pdfUrl: result.pdfUrl?.substring(0, 80),
-        coverUrl: result.coverImageUrl?.substring(0, 120),
-        pdfDownloadUrl: result.pdfDownloadUrl?.substring(0, 80),
-        coverDownloadUrl: result.coverDownloadUrl?.substring(0, 80)
-      });
-
-      return result;
     }
   }
 
@@ -250,8 +240,86 @@ export async function startGenerationViaWebhook(
     return { pdfUrl, coverImageUrl };
   }
 
-  // Polling not supported via edge function proxy - if no immediate result, error
-  throw new Error('No PDF was returned from the book generation service.');
+  throw new Error('No PDF was returned from the book generation service. The AI might still be working or encountered an error.');
+}
+
+/**
+ * Polls the status of a long-running generation
+ */
+async function pollGenerationStatus(
+  statusUrlOrId: string,
+  onProgress?: (p: number) => void
+): Promise<{
+  pdfBlob?: Blob;
+  pdfUrl?: string;
+  coverImageUrl?: string;
+  pdfDownloadUrl?: string;
+  coverDownloadUrl?: string;
+}> {
+  const maxAttempts = 60; // 10 minutes (10s intervals)
+  let attempts = 0;
+
+  // Determine the status URL
+  let statusUrl = statusUrlOrId;
+  if (!statusUrlOrId.startsWith('http')) {
+    // If only an ID was provided, we assume it's part of the n8n status endpoint
+    // This depends on the n8n implementation.
+    statusUrl = `https://wonderwrapslb.app.n8n.cloud/webhook/status/${statusUrlOrId}`;
+  }
+
+  while (attempts < maxAttempts) {
+    attempts++;
+    console.log(`🔍 Polling status (Attempt ${attempts}/${maxAttempts})...`);
+
+    try {
+      const resp = await fetch(statusUrl);
+      if (resp.ok) {
+        const data = await resp.json();
+        const status: GenerationStatusResponse = Array.isArray(data) ? data[0] : data;
+
+        if (status.progress) {
+          onProgress?.(20 + (status.progress * 0.7)); // Scale progress to 20-90% range
+        }
+
+        if (status.status === 'completed') {
+          console.log('✅ Polling complete! Extracting data...');
+          // Reuse the extraction logic from startGenerationViaWebhook by calling it with the final data
+          // But since we are already in a loop, let's just return what we have
+
+          let pdfBlob: Blob | undefined;
+          if (status.pdfBase64) {
+            pdfBlob = base64ToBlob(status.pdfBase64, 'application/pdf');
+          }
+
+          let coverImageUrl = status.coverImageUrl;
+          if (status.coverImageBase64) {
+            coverImageUrl = `data:image/jpeg;base64,${status.coverImageBase64}`;
+          }
+
+          onProgress?.(100);
+          return {
+            pdfUrl: status.pdfUrl,
+            pdfBlob,
+            coverImageUrl,
+            pdfDownloadUrl: status.pdfUrl,
+            coverDownloadUrl: coverImageUrl
+          };
+        }
+
+        if (status.status === 'failed') {
+          throw new Error(status.message || 'Generation failed on the server.');
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ Polling attempt failed:', e);
+    }
+
+    // Wait 10 seconds before next poll
+    await new Promise(resolve => setTimeout(resolve, 10000));
+  }
+
+  throw new Error('Generation timed out after 10 minutes. Please check your magical library later.');
+}
 }
 
 function base64ToBlob(base64: string, mime: string) {

@@ -25,14 +25,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabase = createClient(
+    // Use Service Role Key for internal validation to avoid RLS issues
+    const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { auth: { persistSession: false } }
     );
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -66,8 +67,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Validate themeId dynamically from the database
-    const { data: themeData, error: themeError } = await supabase
+    // Validate themeId dynamically using the admin client
+    const { data: themeData, error: themeError } = await supabaseAdmin
       .from('themes')
       .select('id, is_active')
       .eq('id', themeId)

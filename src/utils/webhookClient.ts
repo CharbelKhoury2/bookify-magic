@@ -108,7 +108,14 @@ export async function startGenerationViaWebhook(
 
     if (triggerError) {
       console.error('🛑 [GENERATOR] Edge Function Error:', triggerError);
-      throw new Error(`Failed to start generation: ${triggerError.message || 'Server error'}`);
+      let errorMsg = triggerError.message || 'Server error';
+
+      // Attempt to extract more specific error if available
+      if (triggerError instanceof Error && 'context' in triggerError) {
+        console.log('🔍 [GENERATOR] Error Context:', (triggerError as any).context);
+      }
+
+      throw new Error(`Failed to start generation: ${errorMsg}`);
     }
 
     console.log(`📡 [GENERATOR] Magic started successfully. Monitoring database...`);

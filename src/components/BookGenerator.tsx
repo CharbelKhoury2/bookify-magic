@@ -11,6 +11,7 @@ import { validateBookData } from '../utils/validators';
 import { downloadPDF, sanitizeFileName } from '../utils/pdfGenerator';
 import { startGenerationViaWebhook, logGenerationStart, updateGenerationStatus, resumeGenerationMonitoring } from '../utils/webhookClient';
 import { safeOpen } from '../utils/security';
+import { forceDownload } from '../utils/imageUtils';
 
 export const BookGenerator: React.FC = () => {
   const {
@@ -230,13 +231,15 @@ export const BookGenerator: React.FC = () => {
   };
 
   const handleDownload = () => {
-    if (generatedBlob && selectedTheme) {
-      const fileName = `${sanitizeFileName(childName)}_${sanitizeFileName(selectedTheme.name)}_book.pdf`;
-      downloadPDF(generatedBlob, fileName);
-      showToast('Download started!', 'success');
-    } else if (generatedPDF) {
-      safeOpen(generatedPDF);
+    const fileName = `${sanitizeFileName(childName)}_${sanitizeFileName(selectedTheme?.name || 'Story')}_book.pdf`;
+
+    if (pdfDownloadBlob) {
+      forceDownload(pdfDownloadBlob, fileName);
+    } else {
+      forceDownload(pdfDownloadUrl || generatedPDF, fileName);
     }
+
+    showToast('Download started!', 'success');
   };
 
   const handleReset = () => {

@@ -3,6 +3,8 @@ export interface Theme {
   name: string;
   emoji: string;
   description: string;
+  isActive?: boolean;
+  sortOrder?: number;
   colors: {
     primary: string;
     secondary: string;

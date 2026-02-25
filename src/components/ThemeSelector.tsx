@@ -1,10 +1,29 @@
-import React from 'react';
-import { THEMES } from '../data/themes';
+import React, { useEffect } from 'react';
 import { Theme } from '../utils/types';
 import { useBookStore } from '../store/bookStore';
+import { useThemeStore } from '../store/themeStore';
+import { LoadingSpinner } from './LoadingSpinner';
 
 export const ThemeSelector: React.FC = () => {
   const { selectedTheme, setSelectedTheme } = useBookStore();
+  const { themes, isLoading, fetchThemes } = useThemeStore();
+
+  useEffect(() => {
+    if (themes.length === 0) {
+      fetchThemes();
+    }
+  }, [themes.length, fetchThemes]);
+
+  const activeThemes = themes.filter(t => t.isActive !== false);
+
+  if (isLoading && themes.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 space-y-4">
+        <LoadingSpinner size="lg" />
+        <p className="text-muted-foreground animate-pulse">Loading magical themes...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -12,7 +31,7 @@ export const ThemeSelector: React.FC = () => {
         Choose a Story Theme ✨
       </label>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        {THEMES.map((theme) => (
+        {activeThemes.map((theme) => (
           <ThemeCard
             key={theme.id}
             theme={theme}
@@ -21,6 +40,11 @@ export const ThemeSelector: React.FC = () => {
           />
         ))}
       </div>
+      {activeThemes.length === 0 && !isLoading && (
+        <div className="p-8 text-center border-2 border-dashed border-border rounded-3xl text-muted-foreground">
+          No themes available yet.
+        </div>
+      )}
     </div>
   );
 };

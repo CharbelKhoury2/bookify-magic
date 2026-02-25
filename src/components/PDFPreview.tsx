@@ -4,7 +4,8 @@ import { useBookStore } from '../store/bookStore';
 import { LoadingSpinner } from './LoadingSpinner';
 import { ImageModal } from './ImageModal';
 import { safeOpen } from '../utils/security';
-import { getThumbnailUrl, getEmbedUrl } from '../utils/imageUtils';
+import { getThumbnailUrl, getEmbedUrl, forceDownload } from '../utils/imageUtils';
+import { sanitizeFileName } from '../utils/pdfGenerator';
 
 interface PDFPreviewProps {
   onDownload: () => void;
@@ -20,7 +21,8 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
     pdfDownloadUrl,
     coverDownloadUrl,
     elapsedTime,
-    generationProgress
+    generationProgress,
+    pdfDownloadBlob
   } = useBookStore();
 
   const [isImageModalOpen, setIsImageModalOpen] = React.useState(false);
@@ -58,20 +60,18 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
   };
 
   const handleDownloadCover = () => {
-    if (coverDownloadUrl) {
-      safeOpen(coverDownloadUrl);
-    } else if (coverImage) {
-      safeOpen(coverImage);
-    }
+    const fileName = `${sanitizeFileName(childName)}_${sanitizeFileName(selectedTheme?.name || 'Story')}_cover.jpg`;
+    forceDownload(coverDownloadUrl || coverImage, fileName);
   };
 
   const handleDownloadPDF = () => {
-    if (pdfDownloadUrl) {
-      console.log('📥 Downloading PDF from URL:', pdfDownloadUrl);
-      safeOpen(pdfDownloadUrl);
+    const fileName = `${sanitizeFileName(childName)}_${sanitizeFileName(selectedTheme?.name || 'Story')}_book.pdf`;
+
+    // Always prefer the blob if we have it locally, otherwise use the URL
+    if (pdfDownloadBlob) {
+      forceDownload(pdfDownloadBlob, fileName);
     } else {
-      console.log('📥 Downloading PDF using fallback handler');
-      onDownload();
+      forceDownload(pdfDownloadUrl || generatedPDF, fileName);
     }
   };
 

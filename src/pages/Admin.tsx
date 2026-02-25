@@ -17,13 +17,18 @@ import {
     Sparkles,
     Lock,
     Globe,
-    Bell
+    Bell,
+    Palette,
+    Plus,
+    Edit2,
+    Check
 } from 'lucide-react';
-import { UserProfile, AppRole } from '@/utils/types';
+import { UserProfile, AppRole, Theme } from '@/utils/types';
 import { Toast, ToastType } from '@/components/Toast';
 import { Link } from 'react-router-dom';
+import { useThemeStore } from '@/store/themeStore';
 
-type AdminTab = 'users' | 'settings' | 'profile';
+type AdminTab = 'users' | 'themes' | 'settings' | 'profile';
 
 export default function Admin() {
     const { user, role, isAdmin, loading: authLoading, signOut } = useAuth();
@@ -33,6 +38,20 @@ export default function Admin() {
     const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
     const [isAddingUser, setIsAddingUser] = useState(false);
     const [newUser, setNewUser] = useState({ email: '', password: '', role: 'user' as AppRole });
+    const { themes, fetchThemes, addTheme, updateTheme, deleteTheme, isLoading: themesLoading } = useThemeStore();
+    const [isAddingTheme, setIsAddingTheme] = useState(false);
+    const [editingTheme, setEditingTheme] = useState<Theme | null>(null);
+    const [themeForm, setThemeForm] = useState<Partial<Theme>>({
+        name: '',
+        emoji: '✨',
+        description: '',
+        colors: {
+            primary: '#4a5899',
+            secondary: '#00d9ff',
+            accent: '#ff6b9d',
+            background: '#1a1f3a'
+        }
+    });
 
     const showToast = (message: string, type: ToastType = 'info') => {
         setToast({ message, type });
@@ -71,8 +90,9 @@ export default function Admin() {
     };
 
     useEffect(() => {
-        if (isAdmin && activeTab === 'users') {
-            fetchUsers();
+        if (isAdmin) {
+            if (activeTab === 'users') fetchUsers();
+            if (activeTab === 'themes') fetchThemes();
         }
     }, [isAdmin, activeTab]);
 
@@ -133,6 +153,52 @@ export default function Admin() {
         }
     };
 
+    const handleSaveTheme = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            setLoading(true);
+            if (editingTheme) {
+                await updateTheme(editingTheme.id, themeForm);
+                showToast('Theme updated successfully!', 'success');
+            } else {
+                await addTheme(themeForm);
+                showToast('New theme added!', 'success');
+            }
+            setIsAddingTheme(false);
+            setEditingTheme(null);
+            setThemeForm({
+                name: '',
+                emoji: '✨',
+                description: '',
+                colors: {
+                    primary: '#4a5899',
+                    secondary: '#00d9ff',
+                    accent: '#ff6b9d',
+                    background: '#1a1f3a'
+                }
+            });
+        } catch (error: any) {
+            showToast(error.message, 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleEditClick = (theme: Theme) => {
+        setEditingTheme(theme);
+        setThemeForm(theme);
+        setIsAddingTheme(true);
+    };
+
+    const handleToggleActive = async (theme: Theme) => {
+        try {
+            await updateTheme(theme.id, { isActive: !theme.isActive });
+            showToast(`Theme ${!theme.isActive ? 'enabled' : 'disabled'}`, 'success');
+        } catch (error: any) {
+            showToast(error.message, 'error');
+        }
+    };
+
     if (authLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
     if (!isAdmin) return <div className="min-h-screen flex items-center justify-center text-destructive font-bold">403 - Forbidden Access</div>;
 
@@ -161,9 +227,10 @@ export default function Admin() {
                         <p className="text-muted-foreground text-lg">Central hub for users, configuration, and your profile.</p>
                     </div>
 
-                    <div className="flex bg-card p-1 rounded-2xl border-2 border-border shadow-sm">
+                    <div className="flex bg-card p-1 rounded-2xl border-2 border-border shadow-sm overflow-x-auto max-w-full">
                         {[
                             { id: 'users', label: 'Users', icon: Users },
+                            { id: 'themes', label: 'Themes', icon: Palette },
                             { id: 'settings', label: 'Settings', icon: SettingsIcon },
                             { id: 'profile', label: 'My Profile', icon: User },
                         ].map((tab) => (
@@ -257,6 +324,78 @@ export default function Admin() {
                                         </tbody>
                                     </table>
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* THEME MANAGEMENT TAB */}
+                    {activeTab === 'themes' && (
+                        <div className="space-y-6">
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-2xl font-bold">Story Themes</h2>
+                                <button
+                                    onClick={() => {
+                                        setEditingTheme(null);
+                                        setIsAddingTheme(true);
+                                    }}
+                                    className="btn-magic flex items-center gap-2"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    Add Theme
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {themesLoading && (
+                                    <div className="col-span-full py-20 text-center">
+                                        <div className="animate-spin w-10 h-10 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
+                                        <p className="text-muted-foreground">Synchronizing magical themes...</p>
+                                    </div>
+                                )}
+                                {!themesLoading && themes.map((theme) => (
+                                    <div key={theme.id} className={`card-magical p-6 flex flex-col ${!theme.isActive ? 'opacity-60 grayscale' : ''}`}>
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div className="text-4xl">{theme.emoji}</div>
+                                            <div className="flex gap-1">
+                                                <button
+                                                    onClick={() => handleToggleActive(theme)}
+                                                    className={`p-2 rounded-lg transition-all ${theme.isActive ? 'text-green-500 bg-green-500/10' : 'text-muted-foreground bg-secondary'}`}
+                                                    title={theme.isActive ? 'Disable Theme' : 'Enable Theme'}
+                                                >
+                                                    <Check className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleEditClick(theme)}
+                                                    className="p-2 text-primary bg-primary/10 rounded-lg transition-all hover:bg-primary/20"
+                                                    title="Edit Theme"
+                                                >
+                                                    <Edit2 className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        if (window.confirm('Delete this theme forever?')) deleteTheme(theme.id);
+                                                    }}
+                                                    className="p-2 text-destructive bg-destructive/10 rounded-lg transition-all hover:bg-destructive/20"
+                                                    title="Delete Theme"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <h3 className="text-lg font-bold">{theme.name}</h3>
+                                        <p className="text-xs text-muted-foreground mb-4 line-clamp-2">{theme.description}</p>
+                                        <div className="flex gap-1.5 mt-auto">
+                                            {Object.entries(theme.colors).map(([key, color]) => (
+                                                <div
+                                                    key={key}
+                                                    className="w-6 h-6 rounded-full border border-border"
+                                                    style={{ backgroundColor: color }}
+                                                    title={`${key}: ${color}`}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     )}
@@ -484,6 +623,136 @@ export default function Admin() {
                     type={toast.type}
                     onClose={() => setToast(null)}
                 />
+            )}
+
+            {/* Theme Modal */}
+            {isAddingTheme && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                    <div className="card-magical w-full max-w-2xl animate-scale-in border-primary/20 max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold">{editingTheme ? 'Update' : 'Create'} Magic Theme</h2>
+                            <button onClick={() => setIsAddingTheme(false)} className="p-2 hover:bg-secondary rounded-full transition-all">
+                                <Key className="w-5 h-5 rotate-45" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSaveTheme} className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Theme Identity</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={themeForm.name}
+                                            onChange={(e) => setThemeForm({ ...themeForm, name: e.target.value })}
+                                            className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary outline-none transition-all"
+                                            placeholder="Theme Name (e.g. Jungle Adventure)"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div className="col-span-1 space-y-1.5">
+                                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Emoji</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={themeForm.emoji}
+                                                onChange={(e) => setThemeForm({ ...themeForm, emoji: e.target.value })}
+                                                className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary outline-none text-center text-2xl"
+                                            />
+                                        </div>
+                                        <div className="col-span-2 space-y-1.5">
+                                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">System ID</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                disabled={!!editingTheme}
+                                                value={themeForm.id}
+                                                onChange={(e) => setThemeForm({ ...themeForm, id: e.target.value })}
+                                                className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary outline-none bg-secondary/30 disabled:opacity-50 font-mono text-sm"
+                                                placeholder="unique_id"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Description</label>
+                                        <textarea
+                                            required
+                                            value={themeForm.description}
+                                            onChange={(e) => setThemeForm({ ...themeForm, description: e.target.value })}
+                                            className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary outline-none min-h-[100px] resize-none"
+                                            placeholder="Briefly describe this theme..."
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">Color Palette</label>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {['primary', 'secondary', 'accent', 'background'].map((key) => (
+                                            <div key={key} className="space-y-1.5">
+                                                <label className="text-[10px] font-bold uppercase text-muted-foreground capitalize">{key} Color</label>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="color"
+                                                        value={themeForm.colors?.[key as keyof Theme['colors']]}
+                                                        onChange={(e) => setThemeForm({
+                                                            ...themeForm,
+                                                            colors: { ...themeForm.colors!, [key]: e.target.value }
+                                                        })}
+                                                        className="h-10 w-10 border-0 p-0 bg-transparent cursor-pointer"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={themeForm.colors?.[key as keyof Theme['colors']]}
+                                                        onChange={(e) => setThemeForm({
+                                                            ...themeForm,
+                                                            colors: { ...themeForm.colors!, [key]: e.target.value }
+                                                        })}
+                                                        className="flex-1 px-3 py-1 rounded-lg border border-border text-xs font-mono"
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="p-6 rounded-2xl border-2 border-primary/20 bg-primary/5 mt-4">
+                                        <p className="text-xs font-bold text-primary mb-2 uppercase tracking-tight">Real-time Preview</p>
+                                        <div
+                                            className="p-4 rounded-xl border-2 border-primary/50 text-center"
+                                            style={{
+                                                backgroundColor: themeForm.colors?.background,
+                                                borderColor: themeForm.colors?.primary,
+                                                color: themeForm.colors?.primary
+                                            }}
+                                        >
+                                            <div className="text-3xl mb-1">{themeForm.emoji}</div>
+                                            <div className="font-bold text-sm" style={{ color: themeForm.colors?.primary }}>{themeForm.name || 'Sample Text'}</div>
+                                            <div className="text-[10px]" style={{ color: themeForm.colors?.secondary }}>Magical Preview</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-4 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsAddingTheme(false)}
+                                    className="flex-1 py-3 rounded-xl border-2 border-border font-bold hover:bg-secondary transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className="flex-1 btn-magic py-3"
+                                >
+                                    {loading ? 'Saving...' : editingTheme ? 'Update Theme' : 'Create Theme'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             )}
         </div>
     );

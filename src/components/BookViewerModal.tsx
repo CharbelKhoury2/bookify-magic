@@ -3,7 +3,8 @@ import { X, Download, FileText, Image } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 import { HistoryItem } from '../utils/types';
 import { safeOpen } from '../utils/security';
-import { getThumbnailUrl, getEmbedUrl } from '../utils/imageUtils';
+import { getThumbnailUrl, getEmbedUrl, forceDownload } from '../utils/imageUtils';
+import { sanitizeFileName } from '../utils/pdfGenerator';
 
 interface BookViewerModalProps {
     isOpen: boolean;
@@ -40,7 +41,10 @@ export const BookViewerModal: React.FC<BookViewerModalProps> = ({ isOpen, onClos
 
                     <div className="flex items-center gap-3">
                         <button
-                            onClick={() => safeOpen(book.pdfDownloadUrl || book.pdfUrl)}
+                            onClick={() => {
+                                const fileName = `${sanitizeFileName(book.childName)}_${sanitizeFileName(book.themeName)}_story.pdf`;
+                                forceDownload(book.pdfDownloadUrl || book.pdfUrl, fileName);
+                            }}
                             className="hidden sm:flex btn-magic px-4 py-2 text-sm items-center gap-2"
                         >
                             <Download className="w-4 h-4" />
@@ -73,7 +77,10 @@ export const BookViewerModal: React.FC<BookViewerModalProps> = ({ isOpen, onClos
                                         className="w-full h-full object-cover rounded-xl"
                                     />
                                     <button
-                                        onClick={() => safeOpen(book.coverDownloadUrl || book.thumbnailUrl)}
+                                        onClick={() => {
+                                            const fileName = `${sanitizeFileName(book.childName)}_${sanitizeFileName(book.themeName)}_cover.jpg`;
+                                            forceDownload(book.coverDownloadUrl || book.thumbnailUrl, fileName);
+                                        }}
                                         className="absolute bottom-4 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 text-primary p-2 rounded-lg shadow-lg hover:scale-105 border border-border/50"
                                         title="Download Cover"
                                     >
@@ -107,7 +114,10 @@ export const BookViewerModal: React.FC<BookViewerModalProps> = ({ isOpen, onClos
                         {/* Mobile Download Button */}
                         <div className="sm:hidden absolute bottom-4 right-4">
                             <button
-                                onClick={() => safeOpen(book.pdfDownloadUrl || book.pdfUrl)}
+                                onClick={() => {
+                                    const fileName = `${sanitizeFileName(book.childName)}_${sanitizeFileName(book.themeName)}_story.pdf`;
+                                    forceDownload(book.pdfDownloadUrl || book.pdfUrl, fileName);
+                                }}
                                 className="btn-magic w-12 h-12 rounded-full p-0 flex items-center justify-center shadow-2xl"
                             >
                                 <Download className="w-5 h-5" />

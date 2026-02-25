@@ -1,5 +1,7 @@
+import { isSafeUrl } from './security';
+
 /**
- * Utility functions for handling image URLs, especially from Google Drive
+ * Utility functions for handling image and PDF URLs, especially from Google Drive
  */
 
 /**
@@ -21,6 +23,20 @@ export function getGoogleDriveFileId(url: string | null | undefined): string | n
     if (lhMatch) return lhMatch[1];
 
     return null;
+}
+
+/**
+ * Returns a URL that forces a download for a Google Drive file
+ */
+export function getDownloadUrl(url: string | null | undefined): string | null {
+    if (!url) return null;
+
+    const driveId = getGoogleDriveFileId(url);
+    if (driveId) {
+        return `https://drive.google.com/uc?id=${driveId}&export=download`;
+    }
+
+    return url;
 }
 
 /**
@@ -48,4 +64,41 @@ export function getEmbedUrl(url: string | null | undefined): string | null {
     }
 
     return url;
+}
+
+/**
+ * Forces a browser download of a URL or Blob
+ */
+export function forceDownload(urlOrBlob: string | Blob | null | undefined, fileName: string): void {
+    if (!urlOrBlob) return;
+
+    // If it's a URL, transform it to a download-friendly version if it's Google Drive
+    let downloadUrl: string;
+    if (typeof urlOrBlob === 'string') {
+        if (!isSafeUrl(urlOrBlob)) {
+            console.warn('Blocked downloading from unsafe URL:', urlOrBlob);
+            return;
+        }
+        downloadUrl = getDownloadUrl(urlOrBlob) || urlOrBlob;
+    } else {
+        downloadUrl = URL.createObjectURL(urlOrBlob);
+    }
+
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = fileName.endsWith('.pdf') || fileName.endsWith('.jpg') || fileName.endsWith('.png')
+        ? fileName
+        : `${fileName}${typeof urlOrBlob !== 'string' && urlOrBlob.type === 'application/pdf' ? '.pdf' : '.jpg'}`;
+
+    link.setAttribute('target', '_blank');
+    document.body.appendChild(link);
+    link.click();
+
+    // Clean up
+    setTimeout(() => {
+        document.body.removeChild(link);
+        if (typeof urlOrBlob !== 'string') {
+            URL.revokeObjectURL(downloadUrl);
+        }
+    }, 100);
 }

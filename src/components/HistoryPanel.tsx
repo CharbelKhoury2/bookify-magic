@@ -17,7 +17,8 @@ import {
 } from "./ui/alert-dialog";
 import { useToast } from '../hooks/use-toast';
 import { safeOpen } from '../utils/security';
-import { getThumbnailUrl } from '../utils/imageUtils';
+import { getThumbnailUrl, forceDownload } from '../utils/imageUtils';
+import { sanitizeFileName } from '../utils/pdfGenerator';
 
 export const HistoryPanel: React.FC = () => {
   const {
@@ -279,16 +280,16 @@ const HistoryCard: React.FC<HistoryCardProps> = ({ item, onRemove, onRestore, on
   const handleDownloadPDF = () => {
     const url = item.pdfDownloadUrl || item.pdfUrl;
     if (url) {
-      safeOpen(url);
-      console.log('📥 Downloading PDF from history:', url);
+      const fileName = `${sanitizeFileName(item.childName)}_${sanitizeFileName(item.themeName)}_story.pdf`;
+      forceDownload(url, fileName);
     }
   };
 
   const handleDownloadCover = () => {
     const url = item.coverDownloadUrl || item.thumbnailUrl;
     if (url) {
-      safeOpen(url);
-      console.log('📥 Downloading cover from history:', url);
+      const fileName = `${sanitizeFileName(item.childName)}_${sanitizeFileName(item.themeName)}_cover.jpg`;
+      forceDownload(url, fileName);
     }
   };
 

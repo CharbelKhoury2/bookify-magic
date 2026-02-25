@@ -6,13 +6,13 @@ import { LoadingSpinner } from './LoadingSpinner';
 
 export const ThemeSelector: React.FC = () => {
   const { selectedTheme, setSelectedTheme } = useBookStore();
-  const { themes, isLoading, fetchThemes } = useThemeStore();
+  const { themes, isLoading, fetchThemes, subscribeToThemes } = useThemeStore();
 
   useEffect(() => {
-    if (themes.length === 0) {
-      fetchThemes();
-    }
-  }, [themes.length, fetchThemes]);
+    fetchThemes();
+    const unsubscribe = subscribeToThemes();
+    return () => unsubscribe();
+  }, [fetchThemes, subscribeToThemes]);
 
   const activeThemes = themes.filter(t => t.isActive !== false);
 

@@ -7,6 +7,7 @@ interface ThemeStore {
     isLoading: boolean;
     error: string | null;
     fetchThemes: () => Promise<void>;
+    subscribeToThemes: () => () => void;
     addTheme: (theme: Partial<Theme>) => Promise<void>;
     updateTheme: (id: string, theme: Partial<Theme>) => Promise<void>;
     deleteTheme: (id: string) => Promise<void>;
@@ -46,6 +47,29 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
             console.error('Error fetching themes:', err);
             set({ error: err.message, isLoading: false });
         }
+    },
+    subscribeToThemes: () => {
+        console.log('🔗 [ThemeStore] Subscribing to themes realtime changes...');
+        const channel = supabase
+            .channel('themes-realtime')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'themes',
+                },
+                async (payload) => {
+                    console.log('✨ [ThemeStore] Realtime event received:', payload.eventType);
+                    await get().fetchThemes();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            console.log('🔌 [ThemeStore] Unsubscribing from themes realtime...');
+            supabase.removeChannel(channel);
+        };
     },
     addTheme: async (theme) => {
         try {

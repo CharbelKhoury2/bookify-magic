@@ -81,7 +81,14 @@ export async function startGenerationViaWebhook(
   const photoBase64 = await imageToBase64(photoFile);
   onProgress?.(15);
 
+  // 1. Log the start of generation in DB to get a unique generationId
+  const generationId = await logGenerationStart(childName.trim(), theme.id, theme.name);
+  if (!generationId) {
+    throw new Error('Failed to initialize the magical book in our database.');
+  }
+
   const payload = {
+    generationId,
     childName: childName.trim(),
     themeId: theme.id,
     themeName: theme.name,
@@ -89,46 +96,87 @@ export async function startGenerationViaWebhook(
     photoMime: photoFile.type || 'image/jpeg',
   };
 
-  const N8N_WEBHOOK_URL = import.meta.env.VITE_N8N_WEBHOOK_URL || "https://wonderwrapslb.app.n8n.cloud/webhook/2b7a5bec-96be-4571-8c7c-aaec8d0934fc";
-  const N8N_API_KEY = import.meta.env.VITE_N8N_API_KEY;
-  const N8N_BASE_URL = import.meta.env.VITE_N8N_BASE_URL || "https://wonderwrapslb.app.n8n.cloud";
-  const N8N_STATUS_URL = import.meta.env.VITE_N8N_STATUS_URL;
-
-  console.log('🚀 [GENERATOR] Triggering n8n workflow...');
+  console.log(`🚀 [GENERATOR] Triggering Supabase Edge Function... (ID: ${generationId})`);
   onProgress?.(25);
 
   try {
-    // 1. Trigger the workflow
-    // The webhook should be configured to respond immediately with {"executionId": "..."}
-    const response = await fetch(N8N_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    // 2. Trigger the Edge Function
+    // We use invoke to call the 'generate-book' function
+    const { data: triggerData, error: triggerError } = await supabase.functions.invoke('generate-book', {
+      body: payload
     });
 
-    if (!response.ok) {
-      throw new Error(`Failed to trigger workflow (${response.status})`);
+    if (triggerError) {
+      console.error('🛑 [GENERATOR] Edge Function Error:', triggerError);
+      throw new Error(`Failed to start generation: ${triggerError.message || 'Server error'}`);
     }
 
-    const triggerData = await response.json();
-    const executionId = triggerData.executionId || triggerData.id;
-
-    if (!executionId) {
-      console.warn('⚠️ [GENERATOR] No executionId received. n8n might not be set to respond immediately.');
-      throw new Error('Server did not provide an execution ID. Please check n8n settings.');
-    }
-
-    console.log(`📡 [GENERATOR] Workflow started. Execution ID: ${executionId}`);
+    console.log(`📡 [GENERATOR] Magic started successfully. Monitoring database...`);
     onProgress?.(30);
 
-    // 2. Start Polling
-    // If we have a status webhook, use it (CORS friendly). Otherwise try Public API.
-    return pollN8nExecution(executionId, N8N_STATUS_URL || N8N_BASE_URL, N8N_API_KEY, onProgress, !!N8N_STATUS_URL);
+    // 3. Start Polling the DATABASE using the specific generationId
+    // This is the most efficient way as we know exactly which record to watch
+    return monitorLibraryForResultById(generationId, onProgress);
 
   } catch (err: any) {
     console.error('🛑 [GENERATOR] Fatal Error:', err);
     throw err;
   }
+}
+
+/**
+ * Monitors a specific database record for completion
+ */
+async function monitorLibraryForResultById(
+  generationId: string,
+  onProgress?: (p: number) => void
+): Promise<any> {
+  const maxAttempts = 180; // 30 minutes (10s intervals)
+  let attempts = 0;
+
+  console.log(`📡 [WATCHER] Monitoring Database for ID: ${generationId}`);
+
+  while (attempts < maxAttempts) {
+    attempts++;
+    
+    // Artificial progress to keep the user excited (scales from 30% to 95%)
+    if (attempts < 100) {
+      onProgress?.(Math.min(95, 30 + (attempts * 0.6)));
+    }
+
+    try {
+      const { data: book, error } = await supabase
+        .from('book_generations')
+        .select('*')
+        .eq('id', generationId)
+        .single();
+
+      if (!error && book) {
+        // If n8n has updated the status to completed
+        if (book.status === 'completed' || (book as any).pdf_url || (book as any).generated_pdf_url) {
+          console.log('✅ [WATCHER] Magic complete! Opening book...');
+          onProgress?.(100);
+          return {
+            pdfUrl: (book as any).pdf_url || (book as any).generated_pdf_url,
+            coverImageUrl: (book as any).thumbnail_url || (book as any).cover_image_url,
+            pdfDownloadUrl: (book as any).pdf_url || (book as any).generated_pdf_url,
+            coverDownloadUrl: (book as any).thumbnail_url || (book as any).cover_image_url,
+          };
+        }
+
+        if (book.status === 'failed') {
+          throw new Error(book.error_message || 'The AI encountered a hiccup. Please try again.');
+        }
+      }
+    } catch (e: any) {
+      if (e.message?.includes('AI encountered a hiccup')) throw e;
+      console.warn('🔍 [WATCHER] DB check failed, retrying...', e);
+    }
+
+    await new Promise(r => setTimeout(r, 10000)); // Wait 10s between checks
+  }
+
+  throw new Error('The magic is taking longer than usual. Please check your "My Library" section in a few minutes.');
 }
 
 /**

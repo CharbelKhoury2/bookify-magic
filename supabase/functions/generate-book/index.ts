@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*", // Update this with your actual production domain for high security
@@ -128,48 +128,30 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ error: "The book generation service is currently busy.", details: errorText }),
         {
-          status: n8nRes.status, // Forward the actual status code
+          status: n8nRes.status,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
 
-    const contentType = n8nRes.headers.get("Content-Type") || "";
-    console.log(`📥 [EDGE] n8n responded with Content-Type: ${contentType}`);
-    
-    // 1. Handle PDF directly as a stream/arrayBuffer for memory efficiency
-    if (contentType.includes("application/pdf")) {
-      const pdfBuffer = await n8nRes.arrayBuffer();
-      return new Response(pdfBuffer, {
-        headers: { 
-          ...corsHeaders, 
-          "Content-Type": "application/pdf",
-          "Content-Length": pdfBuffer.byteLength.toString(),
-          "Content-Disposition": `attachment; filename="book.pdf"`
-        },
-      });
-    }
+    // IMMEDIATELY return the executionId to the browser
+    // This prevents the browser from waiting (and timing out)
+    const triggerData = await n8nRes.json().catch(() => ({}));
+    const executionId = triggerData.executionId || triggerData.id;
 
-    // 2. Handle JSON or other responses
-    const rawResult = await n8nRes.text();
-    
-    // Fallback check: if it's a PDF but n8n didn't set the header correctly
-    if (rawResult.startsWith("%PDF")) {
-      console.log("📄 [EDGE] Detected PDF via magic bytes (header was missing)");
-      // Convert text back to bytes efficiently
-      const bytes = new Uint8Array(rawResult.length);
-      for (let i = 0; i < rawResult.length; i++) {
-        bytes[i] = rawResult.charCodeAt(i) & 0xff;
+    console.log(`✅ [EDGE] Workflow started. Execution ID: ${executionId}`);
+
+    return new Response(
+      JSON.stringify({ 
+        message: "Generation started successfully", 
+        executionId: executionId,
+        status: "pending"
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
-      return new Response(bytes, {
-        headers: { ...corsHeaders, "Content-Type": "application/pdf" },
-      });
-    }
-
-    // Return JSON as is
-    return new Response(rawResult, {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    );
   } catch (err) {
     // Sanitize error logging as per security scan (Info)
     // Detailed error is logged to internal console but not returned to client

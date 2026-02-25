@@ -180,6 +180,16 @@ async function monitorLibraryForResultById(
 }
 
 /**
+ * Publicly exposed version of monitorLibraryForResultById for resuming state after refresh
+ */
+export async function resumeGenerationMonitoring(
+  generationId: string,
+  onProgress?: (p: number) => void
+): Promise<any> {
+  return monitorLibraryForResultById(generationId, onProgress);
+}
+
+/**
  * Polls the n8n Public API for execution status and extracts results from runData
  */
 async function pollN8nExecution(

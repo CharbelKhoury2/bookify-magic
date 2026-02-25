@@ -10,7 +10,7 @@ import { useBookStore } from '../store/bookStore';
 import { useHistoryStore } from '../store/historyStore';
 import { validateBookData } from '../utils/validators';
 import { downloadPDF, sanitizeFileName } from '../utils/pdfGenerator';
-import { startGenerationViaWebhook, logGenerationStart, updateGenerationStatus } from '../utils/webhookClient';
+import { startGenerationViaWebhook, logGenerationStart, updateGenerationStatus, resumeGenerationMonitoring } from '../utils/webhookClient';
 import { safeOpen } from '../utils/security';
 
 export const BookGenerator: React.FC = () => {
@@ -83,12 +83,33 @@ export const BookGenerator: React.FC = () => {
 
   // Initialization: If we were generating before refresh, check if we need to clean up
   React.useEffect(() => {
-    if (isGenerating) {
-      console.log('🔄 Resuming generation state after refresh...');
+    if (isGenerating && currentGenerationId) {
+      console.log('🔄 Resuming generation state after refresh...', currentGenerationId);
       showToast('Magic is still in progress! Please wait...', 'info');
 
+      const resumeMonitoring = async () => {
+        try {
+          const result = await resumeGenerationMonitoring(
+            currentGenerationId,
+            (p) => setGenerationProgress(p)
+          );
+          
+          if (result) {
+            console.log('✨ [RESUME] Found results after refresh:', result);
+            handleGenerationSuccess(result, currentGenerationId);
+          }
+        } catch (err: any) {
+          console.error('🛑 [RESUME] Failed to resume monitoring:', err);
+          setIsGenerating(false);
+          setCurrentGenerationId(null);
+          showToast(err.message || 'Failed to resume generation tracking.', 'error');
+        }
+      };
+
+      resumeMonitoring();
+
       // Safety timeout: If it stays "generating" for too long without a result, reset it
-      // Increased to 1 hour to accommodate very long AI generations
+      // Increased to 2 hours to accommodate very long AI generations
       const timer = setTimeout(() => {
         if (isGenerating) {
           setIsGenerating(false);
@@ -100,6 +121,52 @@ export const BookGenerator: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, []);
+
+  const handleGenerationSuccess = (result: any, generationId: string | null) => {
+    setGenerationProgress(98);
+    const { pdfBlob, pdfUrl, coverImageUrl, pdfDownloadUrl: downloadPdfUrl, coverDownloadUrl: downloadCoverUrl } = result;
+
+    // Update DB to completed if we have an ID
+    if (generationId) {
+      updateGenerationStatus(generationId, 'completed');
+    }
+
+    let finalPdfUrl: string | null = null;
+    if (pdfBlob) {
+      const url = URL.createObjectURL(pdfBlob);
+      finalPdfUrl = url;
+      setGeneratedBlob(pdfBlob);
+      setPdfDownloadBlob(pdfBlob);
+    } else if (pdfUrl) {
+      finalPdfUrl = pdfUrl;
+    }
+
+    if (!finalPdfUrl) return;
+
+    if (coverImageUrl) setCoverImage(coverImageUrl);
+    if (downloadPdfUrl) setPdfDownloadUrl(downloadPdfUrl);
+    if (downloadCoverUrl) setCoverDownloadUrl(downloadCoverUrl);
+
+    // Save to history
+    addToHistory({
+      childName: childName.trim(),
+      themeName: selectedTheme?.name || 'Magical Book',
+      themeEmoji: selectedTheme?.emoji || '✨',
+      pdfUrl: finalPdfUrl,
+      thumbnailUrl: coverImageUrl || processedPhoto?.thumbnail || '',
+      pdfDownloadUrl: downloadPdfUrl,
+      coverDownloadUrl: downloadCoverUrl
+    });
+
+    setGeneratedPDF(finalPdfUrl);
+    setGenerationProgress(100);
+
+    setTimeout(() => {
+      setIsGenerating(false);
+      setCurrentGenerationId(null);
+      setShowFinished(true);
+    }, 1500);
+  };
 
   const handleGenerate = async () => {
     // Safety guard: Don't allow multiple simultaneous calls
@@ -139,70 +206,16 @@ export const BookGenerator: React.FC = () => {
             setGenerationProgress(p);
           }
         );
+
+        if (result) {
+          handleGenerationSuccess(result, generationId);
+        }
       } catch (webhookError: any) {
         console.error('🛑 [UI] Webhook execution failed:', webhookError);
         throw webhookError; // Re-throw to be caught by the outer catch
       }
-
-      console.log('✨ [UI] Webhook call finished, processing results...', result);
-      setGenerationProgress(98);
-      const { pdfBlob, pdfUrl, coverImageUrl, pdfDownloadUrl: downloadPdfUrl, coverDownloadUrl: downloadCoverUrl } = result;
-
-      // Update DB to completed
-      if (generationId) {
-        await updateGenerationStatus(generationId, 'completed');
-      }
-
-      let finalPdfUrl: string | null = null;
-      if (pdfBlob) {
-        console.log('📄 [UI] PDF Blob received, creating local URL');
-        const url = URL.createObjectURL(pdfBlob);
-        finalPdfUrl = url;
-        setGeneratedBlob(pdfBlob);
-        setPdfDownloadBlob(pdfBlob);
-      } else if (pdfUrl) {
-        console.log('📄 [UI] PDF URL received:', pdfUrl);
-        finalPdfUrl = pdfUrl;
-      }
-
-      if (!finalPdfUrl) {
-        console.error('❌ [UI] No PDF URL or Blob found in result object');
-        throw new Error('No PDF returned from webhook. Check the console for details.');
-      }
-
-      if (coverImageUrl) {
-        setCoverImage(coverImageUrl);
-        console.log('📸 [UI] Cover image set for preview:', coverImageUrl);
-      }
-
-      // Store download URLs for both files
-      if (downloadPdfUrl) setPdfDownloadUrl(downloadPdfUrl);
-      if (downloadCoverUrl) setCoverDownloadUrl(downloadCoverUrl);
-
-      // Save to history
-      addToHistory({
-        childName: childName.trim(),
-        themeName: selectedTheme.name,
-        themeEmoji: selectedTheme.emoji,
-        pdfUrl: finalPdfUrl,
-        thumbnailUrl: coverImageUrl || processedPhoto?.thumbnail || '',
-        pdfDownloadUrl: downloadPdfUrl,
-        coverDownloadUrl: downloadCoverUrl
-      });
-
-      console.log('🎉 [UI] Generation complete! Finalizing state.');
-      setGeneratedPDF(finalPdfUrl);
-      setGenerationProgress(100);
-
-      // Small delay to let the user see the 100% state and transition smoothly
-      setTimeout(() => {
-        setIsGenerating(false);
-        setCurrentGenerationId(null);
-        setShowFinished(true); // Show the success modal
-        showToast('Your magical book is ready!', 'success');
-      }, 1000);
-    } catch (error) {
-      console.error('🛑 [UI] Fatal Generation Error:', error);
+    } catch (err: any) {
+      console.error('🛑 [UI] Error in generation flow:', err);
 
       // Update DB to failed
       if (generationId) {
@@ -212,7 +225,7 @@ export const BookGenerator: React.FC = () => {
       setIsGenerating(false);
       setGenerationProgress(0);
       setCurrentGenerationId(null);
-      const message = error instanceof Error ? error.message : 'Failed to generate book. Please try again.';
+      const message = err instanceof Error ? err.message : 'The magic encountered a hiccup. Please try again.';
       showToast(message, 'error');
     }
   };

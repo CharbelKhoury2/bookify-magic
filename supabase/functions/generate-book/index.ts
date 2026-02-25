@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
     }
 
     // Get webhook URL
-    const webhookUrl = Deno.env.get("N8N_WEBHOOK_URL") || "https://wonderwrapslb.app.n8n.cloud/webhook-test/2b7a5bec-96be-4571-8c7c-aaec8d0934fc";
+    const webhookUrl = Deno.env.get("N8N_WEBHOOK_URL") || "https://wonderwrapslb.app.n8n.cloud/webhook/2b7a5bec-96be-4571-8c7c-aaec8d0934fc";
     if (!webhookUrl) {
       return new Response(JSON.stringify({ error: "Webhook not configured" }), {
         status: 500,

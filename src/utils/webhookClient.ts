@@ -92,6 +92,7 @@ export async function startGenerationViaWebhook(
   const N8N_WEBHOOK_URL = import.meta.env.VITE_N8N_WEBHOOK_URL || "https://wonderwrapslb.app.n8n.cloud/webhook/2b7a5bec-96be-4571-8c7c-aaec8d0934fc";
   const N8N_API_KEY = import.meta.env.VITE_N8N_API_KEY;
   const N8N_BASE_URL = import.meta.env.VITE_N8N_BASE_URL || "https://wonderwrapslb.app.n8n.cloud";
+  const N8N_STATUS_URL = import.meta.env.VITE_N8N_STATUS_URL;
 
   console.log('🚀 [GENERATOR] Triggering n8n workflow...');
   onProgress?.(25);
@@ -120,8 +121,9 @@ export async function startGenerationViaWebhook(
     console.log(`📡 [GENERATOR] Workflow started. Execution ID: ${executionId}`);
     onProgress?.(30);
 
-    // 2. Start Polling the n8n Public API
-    return pollN8nExecution(executionId, N8N_BASE_URL, N8N_API_KEY, onProgress);
+    // 2. Start Polling
+    // If we have a status webhook, use it (CORS friendly). Otherwise try Public API.
+    return pollN8nExecution(executionId, N8N_STATUS_URL || N8N_BASE_URL, N8N_API_KEY, onProgress, !!N8N_STATUS_URL);
 
   } catch (err: any) {
     console.error('🛑 [GENERATOR] Fatal Error:', err);
@@ -134,18 +136,19 @@ export async function startGenerationViaWebhook(
  */
 async function pollN8nExecution(
   executionId: string,
-  baseUrl: string,
+  url: string,
   apiKey: string,
-  onProgress?: (p: number) => void
+  onProgress?: (p: number) => void,
+  isWebhook: boolean = false
 ): Promise<any> {
-  if (!apiKey) {
+  if (!apiKey && !isWebhook) {
     throw new Error("n8n API Key is missing. Please set VITE_N8N_API_KEY.");
   }
 
   const maxAttempts = 120; // 20 minutes (10s intervals)
   let attempts = 0;
 
-  console.log(`🔍 [POLL] Monitoring n8n execution: ${executionId}`);
+  console.log(`🔍 [POLL] Monitoring n8n execution: ${executionId} via ${isWebhook ? 'Webhook' : 'Public API'}`);
 
   while (attempts < maxAttempts) {
     attempts++;
@@ -156,38 +159,79 @@ async function pollN8nExecution(
     }
 
     try {
-      const response = await fetch(`${baseUrl}/api/v1/executions/${executionId}`, {
-        headers: { 'X-N8N-API-KEY': apiKey }
-      });
+      console.log(`📡 [POLL] Fetching status for execution ${executionId}...`);
+      
+      let response;
+      if (isWebhook) {
+        // Calling a custom status webhook (CORS enabled)
+        // We pass the executionId as a query param or in the body
+        const statusUrl = new URL(url);
+        statusUrl.searchParams.append('executionId', executionId);
+        response = await fetch(statusUrl.toString(), {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } else {
+        // Calling the n8n Public API directly (usually blocked by CORS in browser)
+        response = await fetch(`${url}/api/v1/executions/${executionId}`, {
+          headers: { 'X-N8N-API-KEY': apiKey }
+        });
+      }
 
       if (!response.ok) {
-        console.warn(`⚠️ [POLL] API check failed (${response.status}). Retrying...`);
+        const errorText = await response.text();
+        console.warn(`⚠️ [POLL] API check failed (${response.status}). Body:`, errorText);
       } else {
         const data = await response.json();
+        
+        // If using a status webhook, the data might be nested differently 
+        // depending on how the user configured the "n8n API" node response.
+        // We try to normalize it.
+        const executionData = isWebhook ? (data.data || data) : data;
+        
+        console.log(`📊 [POLL] Status: ${executionData.status}, Finished: ${executionData.finished}`);
 
         // Check if finished
-        if (data.finished || data.status === 'success') {
-          console.log('✅ [POLL] Execution finished! Extracting data...');
+        if (executionData.finished === true || executionData.status === 'success' || executionData.status === 'completed') {
+          console.log('✅ [POLL] Execution finished! Full Data:', executionData);
           
-          const runData = data.data?.resultData?.runData || {};
+          const runData = executionData.data?.resultData?.runData || executionData.resultData?.runData || {};
           const extractedStories: string[] = [];
           const extractedCovers: string[] = [];
 
+          console.log(`📦 [POLL] Scanning ${Object.keys(runData).length} nodes for results...`);
+
           // Scan all nodes for the specific naming convention provided by user
           Object.keys(runData).forEach(nodeName => {
-            const nodeOutput = runData[nodeName]?.[0]?.data?.main?.[0]?.json;
-            if (nodeOutput?.webViewLink || nodeOutput?.url) {
-              const link = nodeOutput.webViewLink || nodeOutput.url;
-              if (nodeName.startsWith('Upload Story Cover')) {
-                extractedCovers.push(link);
-              } else if (nodeName.startsWith('Upload Story')) {
-                extractedStories.push(link);
+            // n8n runData path can be complex. We try a few common paths.
+            // Path 1: runData[nodeName][0].data.main[0][0].json
+            // Path 2: runData[nodeName][0].data.main[0].json
+            const executionEntry = runData[nodeName]?.[0];
+            const mainData = executionEntry?.data?.main;
+            
+            let nodeOutput = null;
+            if (Array.isArray(mainData?.[0])) {
+              nodeOutput = mainData[0][0]?.json;
+            } else {
+              nodeOutput = mainData?.[0]?.json;
+            }
+
+            if (nodeOutput) {
+              const link = nodeOutput.webViewLink || nodeOutput.url || nodeOutput.fileUrl || nodeOutput.link;
+              if (link) {
+                if (nodeName.startsWith('Upload Story Cover')) {
+                  console.log(`📸 [POLL] Found Cover in node "${nodeName}": ${link}`);
+                  extractedCovers.push(link);
+                } else if (nodeName.startsWith('Upload Story')) {
+                  console.log(`📄 [POLL] Found Story in node "${nodeName}": ${link}`);
+                  extractedStories.push(link);
+                }
               }
             }
           });
 
           if (extractedStories.length === 0) {
-            console.warn('⚠️ [POLL] Finished but no Story link found in runData nodes.');
+            console.warn('⚠️ [POLL] Finished but no Story link found. Node names found:', Object.keys(runData));
           }
 
           onProgress?.(100);
@@ -207,7 +251,16 @@ async function pollN8nExecution(
       }
     } catch (e: any) {
       if (e.message?.includes('AI workflow encountered an error')) throw e;
-      console.warn('🔍 [POLL] Error checking status:', e);
+      console.error('🔍 [POLL] Network/API Error:', {
+        message: e.message,
+        name: e.name,
+        stack: e.stack,
+        cause: e.cause
+      });
+      // If it's a persistent fetch error, we might want to inform the user
+      if (attempts > 5 && (e.message?.includes('Failed to fetch') || e.message?.includes('NetworkError'))) {
+        console.warn('⚠️ [POLL] Multiple network errors detected. This might be a CORS issue with the n8n Public API.');
+      }
     }
 
     // Wait 10 seconds before next poll

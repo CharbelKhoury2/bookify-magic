@@ -155,10 +155,23 @@ async function monitorLibraryForResultById(
         // If n8n has updated the status to completed
         if (book.status === 'completed' || (book as any).pdf_url || (book as any).generated_pdf_url) {
           console.log('✅ [WATCHER] Magic complete! Opening book...');
+          
+          let pdfUrl = (book as any).pdf_url || (book as any).generated_pdf_url || '';
+          let coverUrl = (book as any).thumbnail_url || (book as any).cover_image_url || '';
+
+          // Google Drive Security Fix: Convert /view to /preview for embeddable preview
+          // This fixes the "Content is blocked" error in the iframe
+          if (pdfUrl.includes('drive.google.com') && pdfUrl.includes('/view')) {
+            pdfUrl = pdfUrl.replace('/view', '/preview');
+          }
+          if (coverUrl.includes('drive.google.com') && coverUrl.includes('/view')) {
+            coverUrl = coverUrl.replace('/view', '/preview');
+          }
+
           onProgress?.(100);
           return {
-            pdfUrl: (book as any).pdf_url || (book as any).generated_pdf_url,
-            coverImageUrl: (book as any).thumbnail_url || (book as any).cover_image_url,
+            pdfUrl: pdfUrl,
+            coverImageUrl: coverUrl,
             pdfDownloadUrl: (book as any).pdf_url || (book as any).generated_pdf_url,
             coverDownloadUrl: (book as any).thumbnail_url || (book as any).cover_image_url,
           };

@@ -17,6 +17,7 @@ import {
 } from "./ui/alert-dialog";
 import { useToast } from '../hooks/use-toast';
 import { safeOpen } from '../utils/security';
+import { getThumbnailUrl } from '../utils/imageUtils';
 
 export const HistoryPanel: React.FC = () => {
   const {
@@ -302,7 +303,7 @@ const HistoryCard: React.FC<HistoryCardProps> = ({ item, onRemove, onRestore, on
       {item.thumbnailUrl ? (
         <div className="relative group/img">
           <img
-            src={item.thumbnailUrl}
+            src={getThumbnailUrl(item.thumbnailUrl, 100) || ''}
             alt=""
             className="w-12 h-12 rounded-lg object-cover ring-2 ring-transparent group-hover/img:ring-primary/50 transition-all shadow-sm"
           />

@@ -138,7 +138,7 @@ async function monitorLibraryForResultById(
 
   while (attempts < maxAttempts) {
     attempts++;
-    
+
     // Artificial progress to keep the user excited (scales from 30% to 95%)
     if (attempts < 100) {
       onProgress?.(Math.min(95, 30 + (attempts * 0.6)));
@@ -155,15 +155,16 @@ async function monitorLibraryForResultById(
         // If n8n has updated the status to completed
         if (book.status === 'completed' || (book as any).pdf_url || (book as any).generated_pdf_url) {
           console.log('✅ [WATCHER] Magic complete! Opening book...');
-          
+
           let pdfUrl = (book as any).pdf_url || (book as any).generated_pdf_url || '';
-          let coverUrl = (book as any).thumbnail_url || (book as any).cover_image_url || '';
+          let coverUrl = (book as any).thumbnail_url || (book as any).cover_image_url || (book as any).cover_url || (book as any).featured_image || '';
 
           // Google Drive Security Fix: Convert /view to /preview for embeddable preview
-          // This fixes the "Content is blocked" error in the iframe
           if (pdfUrl.includes('drive.google.com') && pdfUrl.includes('/view')) {
             pdfUrl = pdfUrl.replace('/view', '/preview');
           }
+
+          // If we have a cover URL, ensure it's a good one
           if (coverUrl.includes('drive.google.com') && coverUrl.includes('/view')) {
             coverUrl = coverUrl.replace('/view', '/preview');
           }
@@ -171,9 +172,9 @@ async function monitorLibraryForResultById(
           onProgress?.(100);
           return {
             pdfUrl: pdfUrl,
-            coverImageUrl: coverUrl,
+            coverImageUrl: coverUrl || null,
             pdfDownloadUrl: (book as any).pdf_url || (book as any).generated_pdf_url,
-            coverDownloadUrl: (book as any).thumbnail_url || (book as any).cover_image_url,
+            coverDownloadUrl: (book as any).thumbnail_url || (book as any).cover_image_url || (book as any).cover_url,
           };
         }
 
@@ -223,7 +224,7 @@ async function pollN8nExecution(
 
   while (attempts < maxAttempts) {
     attempts++;
-    
+
     // Artificial progress to keep user engaged (scales from 30% to 95%)
     if (attempts < 100) {
       onProgress?.(Math.min(95, 30 + (attempts * 0.6)));
@@ -231,7 +232,7 @@ async function pollN8nExecution(
 
     try {
       console.log(`📡 [POLL] Fetching status for execution ${executionId}...`);
-      
+
       let response;
       if (isWebhook) {
         // Calling a custom status webhook (CORS enabled)
@@ -254,18 +255,18 @@ async function pollN8nExecution(
         console.warn(`⚠️ [POLL] API check failed (${response.status}). Body:`, errorText);
       } else {
         const data = await response.json();
-        
+
         // If using a status webhook, the data might be nested differently 
         // depending on how the user configured the "n8n API" node response.
         // We try to normalize it.
         const executionData = isWebhook ? (data.data || data) : data;
-        
+
         console.log(`📊 [POLL] Status: ${executionData.status}, Finished: ${executionData.finished}`);
 
         // Check if finished
         if (executionData.finished === true || executionData.status === 'success' || executionData.status === 'completed') {
           console.log('✅ [POLL] Execution finished! Full Data:', executionData);
-          
+
           const runData = executionData.data?.resultData?.runData || executionData.resultData?.runData || {};
           const extractedStories: string[] = [];
           const extractedCovers: string[] = [];
@@ -279,7 +280,7 @@ async function pollN8nExecution(
             // Path 2: runData[nodeName][0].data.main[0].json
             const executionEntry = runData[nodeName]?.[0];
             const mainData = executionEntry?.data?.main;
-            
+
             let nodeOutput = null;
             if (Array.isArray(mainData?.[0])) {
               nodeOutput = mainData[0][0]?.json;
@@ -354,7 +355,7 @@ async function monitorLibraryForResult(
 
   while (attempts < maxAttempts) {
     attempts++;
-    
+
     // Artificial progress to keep the user excited
     if (attempts < 100) {
       onProgress?.(Math.min(99, 25 + (attempts * 0.6)));
@@ -372,7 +373,7 @@ async function monitorLibraryForResult(
 
       if (!error && data && data.length > 0) {
         const book = data[0];
-        
+
         // If n8n has updated the status to completed
         if (book.status === 'completed' || book.pdf_url || book.generated_pdf_url) {
           console.log('✅ [WATCHER] Magic complete! Opening book...');
@@ -412,10 +413,10 @@ async function pollDatabaseStatus(
 
   while (attempts < maxAttempts) {
     attempts++;
-    
+
     // Slowly simulate progress if we don't have real progress data
     if (attempts < 100) {
-      onProgress?.(20 + (attempts * 0.5)); 
+      onProgress?.(20 + (attempts * 0.5));
     }
 
     try {

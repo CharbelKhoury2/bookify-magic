@@ -1,8 +1,9 @@
 import React from 'react';
 import { X, Download, FileText, Image } from 'lucide-react';
-import { Dialog, DialogContent, DialogOverlay, DialogTitle } from './ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 import { HistoryItem } from '../utils/types';
 import { safeOpen } from '../utils/security';
+import { getThumbnailUrl, getEmbedUrl } from '../utils/imageUtils';
 
 interface BookViewerModalProps {
     isOpen: boolean;
@@ -12,6 +13,10 @@ interface BookViewerModalProps {
 
 export const BookViewerModal: React.FC<BookViewerModalProps> = ({ isOpen, onClose, book }) => {
     if (!book) return null;
+
+    const effectiveCoverUrl = getThumbnailUrl(book.thumbnailUrl, 1000);
+    const effectiveEmbedUrl = getEmbedUrl(book.pdfUrl);
+    const showCoverPanel = book.thumbnailUrl && book.thumbnailUrl !== book.pdfUrl;
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -57,42 +62,44 @@ export const BookViewerModal: React.FC<BookViewerModalProps> = ({ isOpen, onClos
                     <div className="premium-blur top-1/4 -left-20 opacity-10" />
                     <div className="premium-blurBottom bottom-1/4 -right-20 opacity-10" />
 
-                    {/* Left Panel: Cover & Info (Hidden on very small screens or sticky) */}
-                    <div className="md:col-span-4 lg:col-span-3 p-6 border-r border-border/10 bg-foreground/5 flex flex-col items-center justify-center overflow-y-auto">
-                        <div className="space-y-6 w-full max-w-[240px]">
-                            <div className="book-frame aspect-[3/4] shadow-2xl relative group">
-                                <img
-                                    src={book.thumbnailUrl}
-                                    alt="Cover Preview"
-                                    className="w-full h-full object-cover rounded-xl"
-                                />
-                                <button
-                                    onClick={() => safeOpen(book.coverDownloadUrl || book.thumbnailUrl)}
-                                    className="absolute bottom-4 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 text-primary p-2 rounded-lg shadow-lg hover:scale-105 border border-border/50"
-                                    title="Download Cover"
-                                >
-                                    <Image className="w-5 h-5" />
-                                </button>
-                            </div>
+                    {/* Left Panel: Cover & Info */}
+                    {showCoverPanel && (
+                        <div className="md:col-span-4 lg:col-span-3 p-6 border-r border-border/10 bg-foreground/5 flex flex-col items-center justify-center overflow-y-auto">
+                            <div className="space-y-6 w-full max-w-[240px]">
+                                <div className="book-frame aspect-[3/4] shadow-2xl relative group">
+                                    <img
+                                        src={effectiveCoverUrl || ''}
+                                        alt="Cover Preview"
+                                        className="w-full h-full object-cover rounded-xl"
+                                    />
+                                    <button
+                                        onClick={() => safeOpen(book.coverDownloadUrl || book.thumbnailUrl)}
+                                        className="absolute bottom-4 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 text-primary p-2 rounded-lg shadow-lg hover:scale-105 border border-border/50"
+                                        title="Download Cover"
+                                    >
+                                        <Image className="w-5 h-5" />
+                                    </button>
+                                </div>
 
-                            <div className="text-center space-y-2">
-                                <p className="text-sm font-semibold text-foreground/70 uppercase tracking-widest flex items-center justify-center gap-2">
-                                    <span className="text-lg">{book.themeEmoji}</span>
-                                    Story Details
-                                </p>
-                                <div className="p-3 rounded-xl bg-foreground/5 border border-border/10 text-xs text-muted-foreground space-y-1">
-                                    <p>Created: {new Date(book.timestamp).toLocaleDateString()}</p>
-                                    <p>Child: {book.childName}</p>
-                                    <p>Theme: {book.themeName}</p>
+                                <div className="text-center space-y-2">
+                                    <p className="text-sm font-semibold text-foreground/70 uppercase tracking-widest flex items-center justify-center gap-2">
+                                        <span className="text-lg">{book.themeEmoji}</span>
+                                        Story Details
+                                    </p>
+                                    <div className="p-3 rounded-xl bg-foreground/5 border border-border/10 text-xs text-muted-foreground space-y-1">
+                                        <p>Created: {new Date(book.timestamp).toLocaleDateString()}</p>
+                                        <p>Child: {book.childName}</p>
+                                        <p>Theme: {book.themeName}</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* Right Panel: PDF Viewer */}
-                    <div className="md:col-span-8 lg:col-span-9 h-full bg-secondary/20 relative">
+                    <div className={showCoverPanel ? "md:col-span-8 lg:col-span-9 h-full bg-secondary/20 relative" : "md:col-span-12 h-full bg-secondary/20 relative"}>
                         <iframe
-                            src={`${book.pdfUrl}#toolbar=0&navpanes=0&view=FitH`}
+                            src={effectiveEmbedUrl ? `${effectiveEmbedUrl}#toolbar=0&navpanes=0&view=FitH` : ''}
                             className="w-full h-full"
                             title="Book Full Viewer"
                         />

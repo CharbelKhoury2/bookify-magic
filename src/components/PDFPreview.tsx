@@ -4,6 +4,7 @@ import { useBookStore } from '../store/bookStore';
 import { LoadingSpinner } from './LoadingSpinner';
 import { ImageModal } from './ImageModal';
 import { safeOpen } from '../utils/security';
+import { getThumbnailUrl, getEmbedUrl } from '../utils/imageUtils';
 
 interface PDFPreviewProps {
   onDownload: () => void;
@@ -24,7 +25,24 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
 
   const [isImageModalOpen, setIsImageModalOpen] = React.useState(false);
   const [coverRetryCount, setCoverRetryCount] = React.useState(0);
-  const [effectiveCoverUrl, setEffectiveCoverUrl] = React.useState<string | null>(null);
+
+  // Use the image utility to get a reliable thumbnail
+  const effectiveCoverUrl = React.useMemo(() => {
+    if (!coverImage) return null;
+
+    // If the cover image is the same as the PDF, we MUST use the thumbnail endpoint
+    // otherwise it won't render in an <img> tag.
+    if (coverImage === generatedPDF || coverImage.toLowerCase().endsWith('.pdf')) {
+      return getThumbnailUrl(coverImage, 1000);
+    }
+
+    return getThumbnailUrl(coverImage, 1000);
+  }, [coverImage, generatedPDF]);
+
+  // Use the embed utility to get a reliable iframe URL
+  const effectiveEmbedUrl = React.useMemo(() => {
+    return getEmbedUrl(generatedPDF);
+  }, [generatedPDF]);
 
   // Format elapsed time as MM:SS
   const formatTime = (seconds: number) => {
@@ -33,56 +51,16 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Reset retry count when coverImage changes
-  React.useEffect(() => {
-    setEffectiveCoverUrl(coverImage);
-    setCoverRetryCount(0);
-    if (coverImage) {
-      console.log('🖼️ PDFPreview: Cover image URL set to:', coverImage);
-    }
-  }, [coverImage]);
-
-  // Handle image load errors by trying fallback URLs
-  const handleCoverImageError = () => {
-    console.warn(`🖼️ Cover image failed to load (attempt ${coverRetryCount + 1}):`, effectiveCoverUrl);
-
-    // Extract Google Drive file ID from the URL
-    let driveId: string | null = null;
-    if (effectiveCoverUrl) {
-      const idMatch = effectiveCoverUrl.match(/(?:id=|\/d\/)([a-zA-Z0-9_-]+)/);
-      if (idMatch) driveId = idMatch[1];
-      // Also try to extract from lh3 thumbnail links
-      if (!driveId && effectiveCoverUrl.includes('lh3.googleusercontent.com')) {
-        // Try to get file ID from the store or original cover URL
-        const origMatch = coverImage?.match(/(?:id=|\/d\/)([a-zA-Z0-9_-]+)/);
-        if (origMatch) driveId = origMatch[1];
-      }
-    }
-
-    const fallbacks = [
-      driveId ? `https://drive.google.com/thumbnail?id=${driveId}&sz=w1000` : null,
-      driveId ? `https://lh3.googleusercontent.com/d/${driveId}=s1000` : null,
-      driveId ? `https://drive.google.com/uc?id=${driveId}&export=view` : null,
-      driveId ? `https://drive.google.com/uc?id=${driveId}&export=download` : null,
-    ].filter(Boolean) as string[];
-
-    if (coverRetryCount < fallbacks.length) {
-      const nextUrl = fallbacks[coverRetryCount];
-      console.log(`🖼️ Trying fallback cover URL #${coverRetryCount + 1}:`, nextUrl);
-      setEffectiveCoverUrl(nextUrl);
-      setCoverRetryCount(prev => prev + 1);
-    } else {
-      console.error('🖼️ All cover image fallbacks exhausted');
-      setEffectiveCoverUrl(null); // Give up, hide the broken image
-    }
+  const handleCoverImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    console.warn(`🖼️ Cover image failed to load:`, e.currentTarget.src);
+    // If it's already using the thumbnail endpoint and failed, there's not much we can do
+    // but we can try to hide it or show a placeholder
   };
 
   const handleDownloadCover = () => {
     if (coverDownloadUrl) {
-      console.log('📥 Downloading cover from URL:', coverDownloadUrl);
       safeOpen(coverDownloadUrl);
     } else if (coverImage) {
-      console.log('📥 Downloading cover from preview URL:', coverImage);
       safeOpen(coverImage);
     }
   };
@@ -191,7 +169,7 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center relative z-10">
-            {effectiveCoverUrl && (
+            {effectiveCoverUrl && coverImage !== generatedPDF && (
               <div className="md:col-span-5 lg:col-span-4">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -223,14 +201,14 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
               </div>
             )}
 
-            <div className={effectiveCoverUrl ? "md:col-span-7 lg:col-span-8" : "md:col-span-12"}>
+            <div className={(effectiveCoverUrl && coverImage !== generatedPDF) ? "md:col-span-7 lg:col-span-8" : "md:col-span-12"}>
               <div className="space-y-3">
                 <p className="text-xs font-bold text-primary uppercase tracking-widest text-center md:text-left">Story Preview</p>
                 <div className="book-frame group mx-auto cursor-default">
                   <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none z-20" />
                   <div className="relative aspect-[3/4] sm:aspect-[4/3] rounded-lg overflow-hidden bg-white shadow-2xl">
                     <iframe
-                      src={`${generatedPDF}#toolbar=0&navpanes=0&view=FitH`}
+                      src={effectiveEmbedUrl ? `${effectiveEmbedUrl}#toolbar=0&navpanes=0&view=FitH` : ''}
                       className="w-full h-full"
                       title="Book Preview"
                     />

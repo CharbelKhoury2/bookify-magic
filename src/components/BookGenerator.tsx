@@ -3,7 +3,6 @@ import { Sparkles, RotateCcw } from 'lucide-react';
 import { ThemeSelector } from './ThemeSelector';
 import { PhotoUploader } from './PhotoUploader';
 import { PDFPreview } from './PDFPreview';
-import { FinishedModal } from './FinishedModal';
 import { Toast, ToastType } from './Toast';
 import { ErrorBoundary } from './ErrorBoundary';
 import { useBookStore } from '../store/bookStore';
@@ -45,7 +44,6 @@ export const BookGenerator: React.FC = () => {
 
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [generatedBlob, setGeneratedBlob] = useState<Blob | null>(null);
-  const [showFinished, setShowFinished] = useState(false);
 
   // Timer logic for generation
   React.useEffect(() => {
@@ -93,7 +91,7 @@ export const BookGenerator: React.FC = () => {
             currentGenerationId,
             (p) => setGenerationProgress(p)
           );
-          
+
           if (result) {
             console.log('✨ [RESUME] Found results after refresh:', result);
             handleGenerationSuccess(result, currentGenerationId);
@@ -161,10 +159,11 @@ export const BookGenerator: React.FC = () => {
     setGeneratedPDF(finalPdfUrl);
     setGenerationProgress(100);
 
+    // No modal anymore - just stop generating and show the preview
     setTimeout(() => {
       setIsGenerating(false);
       setCurrentGenerationId(null);
-      setShowFinished(true);
+      // setShowFinished(true); // Removed as per user request
     }, 1500);
   };
 
@@ -250,7 +249,6 @@ export const BookGenerator: React.FC = () => {
 
     reset();
     setGeneratedBlob(null);
-    setShowFinished(false);
     setCoverImage(null);
     setPdfDownloadUrl(null);
     setPdfDownloadBlob(null);
@@ -336,17 +334,6 @@ export const BookGenerator: React.FC = () => {
 
         {/* PDF Preview / Status */}
         <PDFPreview onDownload={handleDownload} />
-
-        {/* Finished Modal */}
-        <FinishedModal
-          open={showFinished}
-          onClose={() => setShowFinished(false)}
-          onView={() => {
-            if (generatedPDF) {
-              safeOpen(generatedPDF);
-            }
-          }}
-        />
 
         {/* Toast Notification */}
         {toast && (

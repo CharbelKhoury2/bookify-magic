@@ -69,7 +69,8 @@ export async function startGenerationViaWebhook(
   childName: string,
   theme: Theme,
   photoFile: File,
-  onProgress?: (p: number) => void
+  onProgress?: (p: number) => void,
+  preProcessedPhotoBase64?: string
 ): Promise<{
   pdfBlob?: Blob;
   pdfUrl?: string;
@@ -78,7 +79,8 @@ export async function startGenerationViaWebhook(
   coverDownloadUrl?: string;
 }> {
   onProgress?.(5);
-  const photoBase64 = await imageToBase64(photoFile);
+  // Use pre-processed photo if available, otherwise process the file
+  const photoBase64 = preProcessedPhotoBase64 || await imageToBase64(photoFile);
   onProgress?.(15);
 
   // 1. Log the start of generation in DB to get a unique generationId
@@ -110,9 +112,15 @@ export async function startGenerationViaWebhook(
       console.error('🛑 [GENERATOR] Edge Function Error:', triggerError);
       let errorMsg = triggerError.message || 'Server error';
 
-      // Attempt to extract more specific error if available
-      if (triggerError instanceof Error && 'context' in triggerError) {
-        console.log('🔍 [GENERATOR] Error Context:', (triggerError as any).context);
+      // Attempt to extract more specific error from response if available
+      try {
+        if ('context' in triggerError && (triggerError as any).context?.json) {
+          const context = (triggerError as any).context.json;
+          if (context.error) errorMsg = context.error;
+          if (context.details) console.warn('🔍 [GENERATOR] Error Details:', context.details);
+        }
+      } catch (e) {
+        console.warn('Could not parse error context');
       }
 
       throw new Error(`Failed to start generation: ${errorMsg}`);

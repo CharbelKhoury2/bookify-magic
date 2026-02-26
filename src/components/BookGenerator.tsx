@@ -204,7 +204,8 @@ export const BookGenerator: React.FC = () => {
           (p) => {
             console.log(`📊 [UI] Progress: ${p}%`);
             setGenerationProgress(p);
-          }
+          },
+          processedPhoto?.original || undefined
         );
 
         if (result) {

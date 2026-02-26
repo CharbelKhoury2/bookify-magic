@@ -39,7 +39,7 @@ export default function Auth() {
           throw new Error('Passwords do not match');
         }
 
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -50,6 +50,30 @@ export default function Auth() {
           },
         });
         if (error) throw error;
+        
+        // Create user_roles and profiles entries for the new user
+        if (data.user) {
+          try {
+            // Insert into user_roles table (default role: 'user')
+            await supabase
+              .from('user_roles')
+              .insert({ user_id: data.user.id, role: 'user' });
+            
+            // Note: profiles table may not exist - if this fails, user will still be created
+            // The Admin panel queries profiles, so you may need to create this table in Supabase
+            await supabase
+              .from('profiles')
+              .insert({ 
+                id: data.user.id, 
+                email: email,
+                full_name: fullName,
+                created_at: new Date().toISOString()
+              });
+          } catch (profileError) {
+            console.warn('Could not create profile entry:', profileError);
+          }
+        }
+        
         navigate('/');
       }
     } catch (error: any) {

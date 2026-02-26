@@ -50,6 +50,16 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
     },
     subscribeToThemes: () => {
         console.log('🔗 [ThemeStore] Subscribing to themes realtime changes...');
+        
+        // Check if WebSocket is available (may not be on some mobile browsers)
+        if (typeof WebSocket === 'undefined' || window.location.protocol === 'file:') {
+            console.warn('⚠️ [ThemeStore] WebSocket not available, using polling fallback');
+            const pollInterval = setInterval(() => {
+                get().fetchThemes();
+            }, 30000); // Poll every 30 seconds
+            return () => clearInterval(pollInterval);
+        }
+        
         const channel = supabase
             .channel('themes-realtime')
             .on(
@@ -64,11 +74,25 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
                     await get().fetchThemes();
                 }
             )
-            .subscribe();
+            .subscribe((status) => {
+                if (status === 'CHANNEL_ERROR') {
+                    console.error('❌ [ThemeStore] Realtime subscription failed, falling back to polling');
+                    // Fall back to polling on error
+                    const pollInterval = setInterval(() => {
+                        get().fetchThemes();
+                    }, 30000);
+                    // Store interval ID on channel for cleanup
+                    (channel as any).__pollInterval = pollInterval;
+                }
+            });
 
         return () => {
             console.log('🔌 [ThemeStore] Unsubscribing from themes realtime...');
             supabase.removeChannel(channel);
+            // Also clear any polling interval that may have been set
+            if ((channel as any).__pollInterval) {
+                clearInterval((channel as any).__pollInterval);
+            }
         };
     },
     addTheme: async (theme) => {

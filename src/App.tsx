@@ -29,7 +29,7 @@ function HomePage() {
                     className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:shadow-glow transition-all font-bold text-sm"
                   >
                     <ShieldCheck className="w-4 h-4" />
-                    Admin Admin
+                    Admin
                   </Link>
                 )}
                 <span className="text-sm font-semibold text-muted-foreground px-4 hidden sm:block">
@@ -50,10 +50,10 @@ function HomePage() {
             <BookOpen className="w-10 h-10 text-primary-foreground" />
           </div>
           <h1 className="text-4xl sm:text-5xl font-display font-bold text-gradient-magic mb-4">
-            Personalized Book Generator
+            Wonder Wraps LB
           </h1>
           <p className="text-lg sm:text-xl text-muted-foreground max-w-xl mx-auto">
-            Create magical, personalized storybooks for your child in seconds! ✨
+            Personalized children's storybooks where your child is the hero! ✨
           </p>
         </header>
 

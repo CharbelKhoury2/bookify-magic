@@ -8,9 +8,23 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+// Safe localStorage check
+const getSafeStorage = () => {
+  try {
+    if (typeof window === 'undefined') return undefined;
+    const testKey = 'supabase_test';
+    window.localStorage.setItem(testKey, testKey);
+    window.localStorage.removeItem(testKey);
+    return window.localStorage;
+  } catch (e) {
+    console.warn('⚠️ LocalStorage is not available (likely Private Mode). Using in-memory storage.');
+    return undefined; // Supabase will fallback to in-memory
+  }
+};
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
-    storage: localStorage,
+    storage: getSafeStorage(),
     persistSession: true,
     autoRefreshToken: true,
   }

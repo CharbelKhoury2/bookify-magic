@@ -50,48 +50,66 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
     },
     subscribeToThemes: () => {
         console.log('🔗 [ThemeStore] Subscribing to themes realtime changes...');
-        
-        // Check if WebSocket is available (may not be on some mobile browsers)
-        if (typeof WebSocket === 'undefined' || window.location.protocol === 'file:') {
-            console.warn('⚠️ [ThemeStore] WebSocket not available, using polling fallback');
-            const pollInterval = setInterval(() => {
+
+        let pollInterval: NodeJS.Timeout | null = null;
+        let channel: any = null;
+
+        const startPolling = () => {
+            console.warn('⚠️ [ThemeStore] Using polling fallback for themes');
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = setInterval(() => {
                 get().fetchThemes();
             }, 30000); // Poll every 30 seconds
-            return () => clearInterval(pollInterval);
+        };
+
+        try {
+            // Robust check for WebSocket availability
+            const isWebSocketAvailable = typeof window !== 'undefined' &&
+                'WebSocket' in window &&
+                window.WebSocket !== undefined;
+
+            if (!isWebSocketAvailable || window.location.protocol === 'file:') {
+                startPolling();
+                return () => { if (pollInterval) clearInterval(pollInterval); };
+            }
+
+            channel = supabase
+                .channel('themes-realtime')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*',
+                        schema: 'public',
+                        table: 'themes',
+                    },
+                    async (payload) => {
+                        console.log('✨ [ThemeStore] Realtime event received:', payload.eventType);
+                        await get().fetchThemes();
+                    }
+                )
+                .subscribe((status) => {
+                    if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                        console.error(`❌ [ThemeStore] Realtime subscription status: ${status}, falling back to polling`);
+                        startPolling();
+                    }
+                });
+
+        } catch (err) {
+            console.error('❌ [ThemeStore] Failed to initialize realtime:', err);
+            startPolling();
         }
-        
-        const channel = supabase
-            .channel('themes-realtime')
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'themes',
-                },
-                async (payload) => {
-                    console.log('✨ [ThemeStore] Realtime event received:', payload.eventType);
-                    await get().fetchThemes();
-                }
-            )
-            .subscribe((status) => {
-                if (status === 'CHANNEL_ERROR') {
-                    console.error('❌ [ThemeStore] Realtime subscription failed, falling back to polling');
-                    // Fall back to polling on error
-                    const pollInterval = setInterval(() => {
-                        get().fetchThemes();
-                    }, 30000);
-                    // Store interval ID on channel for cleanup
-                    (channel as any).__pollInterval = pollInterval;
-                }
-            });
 
         return () => {
-            console.log('🔌 [ThemeStore] Unsubscribing from themes realtime...');
-            supabase.removeChannel(channel);
-            // Also clear any polling interval that may have been set
-            if ((channel as any).__pollInterval) {
-                clearInterval((channel as any).__pollInterval);
+            console.log('🔌 [ThemeStore] Cleaning up theme subscription...');
+            if (channel) {
+                try {
+                    supabase.removeChannel(channel);
+                } catch (e) {
+                    console.warn('Could not remove channel', e);
+                }
+            }
+            if (pollInterval) {
+                clearInterval(pollInterval);
             }
         };
     },

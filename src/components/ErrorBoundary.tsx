@@ -29,22 +29,41 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       if (this.props.fallback) {
         return this.props.fallback;
       }
-      
+
+      const isEnvironmentError = this.state.error?.message?.includes('WebSocket') ||
+        this.state.error?.message?.includes('insecure') ||
+        this.state.error?.message?.includes('Storage');
+
       return (
-        <div className="card-magical p-8 text-center">
-          <div className="text-4xl mb-4">😢</div>
+        <div className="card-magical p-8 text-center max-w-lg mx-auto my-12">
+          <div className="text-4xl mb-4">
+            {isEnvironmentError ? '🔌' : '😢'}
+          </div>
           <h2 className="text-xl font-bold text-foreground mb-2">
-            Oops! Something went wrong
+            {isEnvironmentError ? 'Connection Hiccup' : 'Oops! Something went wrong'}
           </h2>
-          <p className="text-muted-foreground mb-4">
-            {this.state.error?.message || 'An unexpected error occurred'}
+          <p className="text-muted-foreground mb-6">
+            {isEnvironmentError
+              ? "Your browser's security settings (like Private Mode) might be limiting some magical connections. Don't worry, the site should still work!"
+              : (this.state.error?.message || 'An unexpected error occurred')}
           </p>
-          <button
-            onClick={() => this.setState({ hasError: false, error: undefined })}
-            className="btn-magic"
-          >
-            Try Again
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              onClick={() => {
+                this.setState({ hasError: false, error: undefined });
+                window.location.reload();
+              }}
+              className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold hover:shadow-glow transition-all"
+            >
+              Refresh Page
+            </button>
+            <button
+              onClick={() => this.setState({ hasError: false, error: undefined })}
+              className="px-6 py-2.5 rounded-xl border-2 border-border font-semibold hover:bg-secondary/50 transition-all"
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
       );
     }

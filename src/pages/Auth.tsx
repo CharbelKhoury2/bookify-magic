@@ -39,7 +39,6 @@ export default function Auth() {
           throw new Error('Passwords do not match');
         }
 
-
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -51,10 +50,7 @@ export default function Auth() {
           },
         });
         if (error) throw error;
-        setMessage({
-          text: 'Registration successful! Check your email to confirm your account.',
-          type: 'success',
-        });
+        navigate('/');
       }
     } catch (error: any) {
       setMessage({

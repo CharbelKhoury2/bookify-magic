@@ -86,7 +86,7 @@ export async function startGenerationViaWebhook(
   // 1. Log the start of generation in DB to get a unique generationId
   const generationId = await logGenerationStart(childName.trim(), theme.id, theme.name);
   if (!generationId) {
-    throw new Error('Failed to initialize the magical book in our database.');
+    throw new Error('Our crystal ball is cloudy! We couldn\'t initialize your magical book. Please try again in a moment. ✨');
   }
 
   const payload = {
@@ -194,18 +194,18 @@ async function monitorLibraryForResultById(
         }
 
         if (book.status === 'failed') {
-          throw new Error(book.error_message || 'The AI encountered a hiccup. Please try again.');
+          throw new Error(book.error_message || 'The magic encountered a little breeze! Please try generating your story again. 🪄');
         }
       }
     } catch (e: any) {
-      if (e.message?.includes('AI encountered a hiccup')) throw e;
+      if (e.message?.includes('little breeze')) throw e;
       console.warn('🔍 [WATCHER] DB check failed, retrying...', e);
     }
 
     await new Promise(r => setTimeout(r, 10000)); // Wait 10s between checks
   }
 
-  throw new Error('The magic is taking longer than usual. Please check your "My Library" section in a few minutes.');
+  throw new Error('The magical ink is taking a bit longer than usual to dry. 🎨 Your story is still being crafted! Please check "My Library" in a few minutes.');
 }
 
 /**
@@ -354,7 +354,7 @@ async function pollN8nExecution(
     await new Promise(resolve => setTimeout(resolve, 10000));
   }
 
-  throw new Error('Generation timed out after 20 minutes. Please check your library later.');
+  throw new Error('The wizard is working overtime! 🧙‍♂️ Your story is taking longer than expected. Please check your library in a little while.');
 }
 
 /**
@@ -411,7 +411,7 @@ async function monitorLibraryForResult(
     await new Promise(r => setTimeout(r, 10000)); // Wait 10s between checks
   }
 
-  throw new Error('The magic is taking longer than usual. Please check your "My Library" section in a few minutes.');
+  throw new Error('The magical quill is still writing... ✍️ Your book isn\'t quite ready yet. Please peek into "My Library" in a few minutes!');
 }
 
 /**
@@ -465,7 +465,7 @@ async function pollDatabaseStatus(
     await new Promise(resolve => setTimeout(resolve, 10000));
   }
 
-  throw new Error('The magic is taking longer than 30 minutes. Please check your library later.');
+  throw new Error('Our magical owls are still delivering the pages! 🦉 Check your library later to see your completed adventure.');
 }
 
 /**
@@ -545,7 +545,7 @@ async function pollGenerationStatus(
     await new Promise(resolve => setTimeout(resolve, 10000));
   }
 
-  throw new Error('Generation timed out after 30 minutes. Please check your magical library later.');
+  throw new Error('The magic portal is busy today! 🌟 Your story is still in the works. Please visit "My Library" in a few minutes.');
 }
 
 function base64ToBlob(base64: string, mime: string) {

@@ -84,7 +84,7 @@ export const BookGenerator: React.FC = () => {
   React.useEffect(() => {
     if (isGenerating && currentGenerationId) {
       console.log('🔄 Resuming generation state after refresh...', currentGenerationId);
-      showToast('Magic is still in progress! Please wait...', 'info');
+      showToast('The magic is still flowing! Please hold on just a moment... ✨', 'info');
 
       const resumeMonitoring = async () => {
         try {
@@ -101,7 +101,7 @@ export const BookGenerator: React.FC = () => {
           console.error('🛑 [RESUME] Failed to resume monitoring:', err);
           setIsGenerating(false);
           setCurrentGenerationId(null);
-          showToast(err.message || 'Failed to resume generation tracking.', 'error');
+          showToast(err.message || 'We lost the magical trail! Please try refreshing or generating again.', 'error');
         }
       };
 
@@ -113,7 +113,7 @@ export const BookGenerator: React.FC = () => {
         if (isGenerating) {
           setIsGenerating(false);
           setCurrentGenerationId(null);
-          showToast('The magic session took longer than expected. If it continues, please check your network or try again later.', 'error');
+          showToast('The magic portal is taking a long time to open. 🕰️ If it doesn\'t appear soon, please try again.', 'error');
         }
       }, 7200000); // 2 hours
 
@@ -174,7 +174,7 @@ export const BookGenerator: React.FC = () => {
 
     const validation = validateBookData(childName, selectedTheme?.id || null, uploadedPhoto);
     if (!validation.isValid) {
-      showToast(validation.error || 'Please fill in all fields', 'error');
+      showToast(validation.error || 'Please fill in all the magical ingredients! ✨', 'error');
       return;
     }
 
@@ -226,7 +226,7 @@ export const BookGenerator: React.FC = () => {
       setIsGenerating(false);
       setGenerationProgress(0);
       setCurrentGenerationId(null);
-      const message = err instanceof Error ? err.message : 'The magic encountered a hiccup. Please try again.';
+      const message = err instanceof Error ? err.message : 'The magic encountered a little breeze! Please try generating your story again. 🪄';
       showToast(message, 'error');
     }
   };

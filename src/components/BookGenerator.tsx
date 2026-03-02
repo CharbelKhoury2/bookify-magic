@@ -54,8 +54,11 @@ export const BookGenerator: React.FC = () => {
     coverImageUrl?: string;
     pdfDownloadUrl?: string;
     coverDownloadUrl?: string;
+    childName?: string;
+    themeName?: string;
+    themeEmoji?: string;
   }, generationId: string) => {
-    const { pdfBlob, pdfUrl, coverImageUrl, pdfDownloadUrl: downloadPdfUrl, coverDownloadUrl: downloadCoverUrl } = result;
+    const { pdfBlob, pdfUrl, coverImageUrl, pdfDownloadUrl: downloadPdfUrl, coverDownloadUrl: downloadCoverUrl, childName: resChildName, themeName: resThemeName, themeEmoji: resThemeEmoji } = result;
 
     updateGenerationStatus(generationId, 'completed');
 
@@ -73,9 +76,12 @@ export const BookGenerator: React.FC = () => {
     if (downloadPdfUrl) setPdfDownloadUrl(downloadPdfUrl);
     if (downloadCoverUrl) setCoverDownloadUrl(downloadCoverUrl);
 
-    const gen = activeGenerations[generationId];
+    // Use getState() to get the absolute latest activeGenerations and avoid stale closure issues
+    const latestActiveGenerations = useBookStore.getState().activeGenerations;
+    const gen = latestActiveGenerations[generationId];
+
     if (gen) {
-      console.log('📝 Saving completed book to history for:', gen.childName);
+      console.log('📝 [SUCCESS] Saving book to library for:', gen.childName);
       addToHistory({
         childName: gen.childName,
         themeName: gen.theme.name,
@@ -86,22 +92,21 @@ export const BookGenerator: React.FC = () => {
         coverDownloadUrl: downloadCoverUrl
       });
       showToast(`✨ Magic complete! "${gen.childName}'s ${gen.theme.name}" is now in your library.`, 'success');
+    } else if (resChildName && resThemeName) {
+      console.log('📝 [SUCCESS] Saving book to library via fallback metadata for:', resChildName);
+      addToHistory({
+        childName: resChildName,
+        themeName: resThemeName,
+        themeEmoji: resThemeEmoji || '📚',
+        pdfUrl: finalPdfUrl,
+        thumbnailUrl: coverImageUrl || '',
+        pdfDownloadUrl: downloadPdfUrl,
+        coverDownloadUrl: downloadCoverUrl
+      });
+      showToast(`✨ Magic complete! "${resChildName}'s ${resThemeName}" is now in your library.`, 'success');
     } else {
-      console.warn('⚠️ [SUCCESS] Could not find active generation metadata for ID:', generationId);
-      // Fallback: If metadata is lost, we still want to save it to history if possible
-      // but we don't have the childName/theme from the result object alone usually.
-      // However, we can try to extract it from the result if it was sent back.
-      if (result.childName && result.themeName) {
-        addToHistory({
-          childName: result.childName as string,
-          themeName: result.themeName as string,
-          themeEmoji: result.themeEmoji as string || '📚',
-          pdfUrl: finalPdfUrl,
-          thumbnailUrl: coverImageUrl || '',
-          pdfDownloadUrl: downloadPdfUrl,
-          coverDownloadUrl: downloadCoverUrl
-        });
-      }
+      console.error('🛑 [SUCCESS] Critical: Could not save book. Metadata missing for ID:', generationId);
+      showToast('Magic finished, but we lost the book label! Check your library.', 'warning');
     }
 
     updateActiveGeneration(generationId, { progress: 100, status: 'completed' });
@@ -110,7 +115,7 @@ export const BookGenerator: React.FC = () => {
       removeActiveGeneration(generationId);
       monitoringRef.current.delete(generationId);
     }, 5000);
-  }, [activeGenerations, addToHistory, removeActiveGeneration, setCoverDownloadUrl, setCoverImage, setPdfDownloadBlob, setPdfDownloadUrl, updateActiveGeneration, showToast]);
+  }, [addToHistory, removeActiveGeneration, setCoverDownloadUrl, setCoverImage, setPdfDownloadBlob, setPdfDownloadUrl, updateActiveGeneration, showToast]);
 
   const resumeMonitoring = React.useCallback(async (id: string) => {
     if (monitoringRef.current.has(id)) return;
@@ -118,7 +123,9 @@ export const BookGenerator: React.FC = () => {
 
     try {
       const result = await resumeGenerationMonitoring(id, (p) => {
-        updateActiveGeneration(id, { progress: p, elapsedTime: Math.floor((Date.now() - activeGenerations[id]?.startTime || Date.now()) / 1000) });
+        const latestActiveGenerations = useBookStore.getState().activeGenerations;
+        const startTime = latestActiveGenerations[id]?.startTime || Date.now();
+        updateActiveGeneration(id, { progress: p, elapsedTime: Math.floor((Date.now() - startTime) / 1000) });
       });
 
       if (result) {
@@ -140,7 +147,7 @@ export const BookGenerator: React.FC = () => {
       showToast(error.message || 'We lost the magical trail for one of your books!', 'error');
       monitoringRef.current.delete(id);
     }
-  }, [activeGenerations, updateActiveGeneration, handleGenerationSuccess, showToast]);
+  }, [updateActiveGeneration, handleGenerationSuccess, showToast]);
 
   // Initialization: Resume any pending generations after refresh
   React.useEffect(() => {

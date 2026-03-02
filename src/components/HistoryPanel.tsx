@@ -5,6 +5,7 @@ import { useBookStore } from '../store/bookStore';
 import { formatDistanceToNow } from 'date-fns';
 import { HistoryItem } from '../utils/types';
 import { BookViewerModal } from './BookViewerModal';
+import { fetchCompletedBooks, getPdfUrlForGeneration } from '../utils/webhookClient';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,6 +35,8 @@ export const HistoryPanel: React.FC = () => {
   const { toast } = useToast();
   const [viewingBook, setViewingBook] = React.useState<HistoryItem | null>(null);
   const [view, setView] = React.useState<'active' | 'trash'>('active');
+  const [databaseBooks, setDatabaseBooks] = React.useState<HistoryItem[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
   const [confirmConfig, setConfirmConfig] = React.useState<{
     isOpen: boolean;
     title: string;
@@ -49,15 +52,57 @@ export const HistoryPanel: React.FC = () => {
     actionLabel: 'Confirm',
   });
 
+  // Fetch completed books from database on component mount
+  React.useEffect(() => {
+    const loadDatabaseBooks = async () => {
+      setIsLoading(true);
+      try {
+        const books = await fetchCompletedBooks();
+        setDatabaseBooks(books);
+      } catch (error) {
+        console.error('Failed to load database books:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadDatabaseBooks();
+
+    // Set up periodic refresh every 30 seconds
+    const interval = setInterval(loadDatabaseBooks, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Use database books instead of local history for completed books
+  const displayBooks = databaseBooks;
+
   const confirm = (config: Omit<typeof confirmConfig, 'isOpen'>) => {
     setConfirmConfig({ ...config, isOpen: true });
   };
 
-  const handleCardClick = (item: HistoryItem) => {
-    setViewingBook(item);
-    // Also load it into store for quick access if they close modal
-    loadBook(item);
-    console.log('📖 Viewing book from history:', item.childName);
+  const handleCardClick = async (item: HistoryItem) => {
+    // Fetch the latest PDF data based on the generation ID
+    const freshData = await getPdfUrlForGeneration(item.id);
+    
+    if (freshData) {
+      // Use the fresh data with updated URLs
+      const updatedItem: HistoryItem = {
+        ...item,
+        pdfUrl: freshData.pdfUrl,
+        thumbnailUrl: freshData.coverImageUrl || item.thumbnailUrl,
+        pdfDownloadUrl: freshData.pdfDownloadUrl,
+        coverDownloadUrl: freshData.coverDownloadUrl
+      };
+      
+      setViewingBook(updatedItem);
+      loadBook(updatedItem);
+      console.log('📖 Viewing book from library with fresh data:', item.childName);
+    } else {
+      // Fallback to original item if fresh data fetch fails
+      setViewingBook(item);
+      loadBook(item);
+      console.log('📖 Viewing book from library (fallback):', item.childName);
+    }
   };
 
   // Component logic moved into the main return to support tabs
@@ -76,13 +121,13 @@ export const HistoryPanel: React.FC = () => {
               ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:bg-secondary/50'
               }`}
-            aria-label={`Show ${history.length} active books in library`}
+            aria-label={`Show ${displayBooks.length} active books in library`}
           >
             <Clock className="w-3.5 h-3.5" />
             Recent
             <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${view === 'active' ? 'bg-primary-foreground/20' : 'bg-secondary'
               }`}>
-              {history.length}
+              {displayBooks.length}
             </span>
           </button>
           <button
@@ -127,17 +172,18 @@ export const HistoryPanel: React.FC = () => {
           )}
 
           {view === 'active' ? (
-            history.length > 0 && (
+            displayBooks.length > 0 && (
               <button
                 onClick={() => confirm({
                   title: "Clear all active books?",
                   description: "This will move all your current books to the trash. You can still restore them later.",
                   actionLabel: "Clear all",
                   onConfirm: () => {
-                    clearHistory();
+                    // For database books, we can't move to trash - just refresh
+                    setDatabaseBooks([]);
                     toast({
-                      title: "History Cleared",
-                      description: "All books have been moved to the trash.",
+                      title: "Library Cleared",
+                      description: "All books have been removed from the library view.",
                     });
                   },
                 })}
@@ -216,22 +262,23 @@ export const HistoryPanel: React.FC = () => {
               </div>
             ))}
 
-            {history.length === 0 && Object.keys(activeGenerations).length === 0 ? (
+            {displayBooks.length === 0 && Object.keys(activeGenerations).length === 0 ? (
               <div className="text-center py-10 opacity-60">
                 <div className="text-3xl mb-2">📚</div>
                 <p className="text-sm font-medium">Your library is empty</p>
                 <p className="text-[11px] text-muted-foreground">New books will appear here</p>
               </div>
             ) : (
-              history.map((item) => (
+              displayBooks.map((item) => (
                 <HistoryCard
                   key={item.id}
                   item={item}
                   onRemove={() => {
-                    removeFromHistory(item.id);
+                    // For database books, we can't remove - just refresh the list
+                    setDatabaseBooks(prev => prev.filter(book => book.id !== item.id));
                     toast({
-                      title: "Moved to Trash",
-                      description: `"${item.childName}'s Adventure" can be restored from the Trash tab.`,
+                      title: "Book Removed",
+                      description: `"${item.childName}'s Adventure" has been removed from the library view.`,
                     });
                   }}
                   onClick={() => handleCardClick(item)}

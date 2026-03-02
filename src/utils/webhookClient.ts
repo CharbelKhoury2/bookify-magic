@@ -1,6 +1,7 @@
 import { Theme } from './types';
 import { imageToBase64 } from './imageProcessor';
 import { supabase } from '@/integrations/supabase/client';
+import { HistoryItem } from './types';
 
 export interface GenerationStartResponse {
   status?: string;
@@ -215,6 +216,148 @@ async function monitorLibraryForResultById(
   }
 
   throw new Error('The magical ink is taking a bit longer than usual to dry. 🎨 Your story is still being crafted! Please check "My Library" in a few minutes.');
+}
+
+/**
+ * Gets PDF URL for a specific generation ID
+ */
+export async function getPdfUrlForGeneration(generationId: string): Promise<{
+  pdfUrl: string;
+  coverImageUrl: string;
+  pdfDownloadUrl: string;
+  coverDownloadUrl: string;
+  childName: string;
+  themeName: string;
+  themeEmoji: string;
+} | null> {
+  try {
+    const { data: book, error } = await supabase
+      .from('book_generations')
+      .select('*')
+      .eq('id', generationId)
+      .single();
+
+    if (error || !book) {
+      console.error(`❌ [PDF] Failed to fetch book for generation ${generationId}:`, error);
+      return null;
+    }
+
+    // Check if the book has any additional data stored as JSON
+    // The PDF URLs might be stored in a JSON column or added by n8n
+    const bookData = book as any;
+    
+    // Try to extract PDF URLs from various possible fields
+    const pdfUrl = bookData.pdf_url || bookData.generated_pdf_url || bookData.pdfUrl || bookData.pdf || '';
+    const coverUrl = bookData.thumbnail_url || bookData.cover_image_url || bookData.cover_url || bookData.coverImageUrl || bookData.thumbnail || '';
+
+    if (!pdfUrl && book.status !== 'completed') {
+      console.log(`❌ [PDF] Generation ${generationId} is not completed yet and no PDF URL found`);
+      return null;
+    }
+
+    if (!pdfUrl) {
+      console.log(`❌ [PDF] No PDF URL found for generation ${generationId}`);
+      return null;
+    }
+
+    // Google Drive Security Fix: Convert /view to /preview for embeddable preview
+    let finalPdfUrl = pdfUrl;
+    if (finalPdfUrl.includes('drive.google.com') && finalPdfUrl.includes('/view')) {
+      finalPdfUrl = finalPdfUrl.replace('/view', '/preview');
+    }
+
+    // If we have a cover URL, ensure it's a good one
+    let finalCoverUrl = coverUrl;
+    if (finalCoverUrl.includes('drive.google.com') && finalCoverUrl.includes('/view')) {
+      finalCoverUrl = finalCoverUrl.replace('/view', '/preview');
+    }
+
+    return {
+      pdfUrl: finalPdfUrl,
+      coverImageUrl: finalCoverUrl || null,
+      pdfDownloadUrl: pdfUrl,
+      coverDownloadUrl: coverUrl,
+      childName: book.child_name,
+      themeName: book.theme_name,
+      themeEmoji: bookData.theme_emoji || '📚',
+    };
+
+  } catch (error) {
+    console.error(`❌ [PDF] Error fetching PDF for generation ${generationId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Fetches completed books from the Supabase database
+ */
+export async function fetchCompletedBooks(): Promise<HistoryItem[]> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { data, error } = await supabase
+      .from('book_generations')
+      .select('*')
+      .eq('status', 'completed')
+      .eq('user_id', user?.id || null)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('❌ [LIBRARY] Failed to fetch completed books:', error);
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      console.log('📚 [LIBRARY] No completed books found');
+      return [];
+    }
+
+    console.log(`📚 [LIBRARY] Found ${data.length} completed books`);
+
+    // Transform database records to HistoryItem format
+    const historyItems: HistoryItem[] = data
+      .map((book: any) => {
+        // Try to extract PDF URLs from various possible fields
+        const pdfUrl = book.pdf_url || book.generated_pdf_url || book.pdfUrl || book.pdf || '';
+        const thumbnailUrl = book.thumbnail_url || book.cover_image_url || book.cover_url || book.coverImageUrl || book.thumbnail || '';
+        
+        // Only include books that actually have PDF URLs
+        if (!pdfUrl) {
+          console.warn(`⚠️ [LIBRARY] Skipping book ${book.id} - no PDF URL found`);
+          return null;
+        }
+
+        // Google Drive Security Fix: Convert /view to /preview for embeddable preview
+        let finalPdfUrl = pdfUrl;
+        if (finalPdfUrl.includes('drive.google.com') && finalPdfUrl.includes('/view')) {
+          finalPdfUrl = finalPdfUrl.replace('/view', '/preview');
+        }
+
+        let finalThumbnailUrl = thumbnailUrl;
+        if (finalThumbnailUrl.includes('drive.google.com') && finalThumbnailUrl.includes('/view')) {
+          finalThumbnailUrl = finalThumbnailUrl.replace('/view', '/preview');
+        }
+        
+        return {
+          id: book.id,
+          childName: book.child_name,
+          themeName: book.theme_name,
+          themeEmoji: book.theme_emoji || '📚',
+          timestamp: new Date(book.created_at).getTime(),
+          pdfUrl: finalPdfUrl,
+          thumbnailUrl: finalThumbnailUrl,
+          pdfDownloadUrl: pdfUrl,
+          coverDownloadUrl: thumbnailUrl
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+
+    return historyItems;
+
+  } catch (error) {
+    console.error('❌ [LIBRARY] Error fetching completed books:', error);
+    return [];
+  }
 }
 
 /**

@@ -63,7 +63,7 @@ export default function Admin() {
         setToast({ message, type });
     };
 
-    const fetchUsers = async () => {
+    const fetchUsers = React.useCallback(async () => {
         try {
             setLoading(true);
             const { data: rolesData, error: rolesError } = await supabase
@@ -73,10 +73,10 @@ export default function Admin() {
             if (rolesError) throw rolesError;
 
             const { data: profilesData, error: profilesError } = await supabase
-                .from('profiles' as any)
+                .from('profiles')
                 .select('*');
 
-            const combined: UserProfile[] = (profilesData || []).map((p: any) => {
+            const combined: UserProfile[] = (profilesData || []).map((p: { id: string; email: string; created_at: string }) => {
                 const roleObj = rolesData.find(r => r.user_id === p.id);
                 return {
                     id: p.id,
@@ -87,20 +87,21 @@ export default function Admin() {
             });
 
             setProfiles(combined);
-        } catch (error: any) {
-            console.error('Error fetching users:', error);
+        } catch (error: unknown) {
+            const err = error as Error;
+            console.error('Error fetching users:', err);
             showToast('Users list restricted. Check profiles table.', 'error');
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         if (isAdmin) {
             if (activeTab === 'users') fetchUsers();
             if (activeTab === 'themes') fetchThemes();
         }
-    }, [isAdmin, activeTab]);
+    }, [isAdmin, activeTab, fetchThemes, fetchUsers]);
 
     const handleUpdateRole = async (userId: string, newRole: AppRole) => {
         try {
@@ -112,8 +113,9 @@ export default function Admin() {
             if (error) throw error;
             showToast('User role updated!', 'success');
             fetchUsers();
-        } catch (error: any) {
-            showToast(error.message, 'error');
+        } catch (error: unknown) {
+            const err = error as Error;
+            showToast(err.message, 'error');
         }
     };
 
@@ -148,7 +150,8 @@ export default function Admin() {
             } else {
                 throw new Error('Failed to connect to the magical gateway');
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const err = error as Error;
             console.error('Webhook error:', error);
             // Even if it fails, we show success if the user said "assume success once the webhook responds"
             // but here we check response.ok. If it's a network error, we might want to know.
@@ -170,8 +173,9 @@ export default function Admin() {
             });
             if (error) throw error;
             showToast('Password reset link sent to your email!', 'success');
-        } catch (error: any) {
-            showToast(error.message, 'error');
+        } catch (error: unknown) {
+            const err = error as Error;
+            showToast(err.message, 'error');
         }
     };
 
@@ -199,8 +203,9 @@ export default function Admin() {
                     background: '#1a1f3a'
                 }
             });
-        } catch (error: any) {
-            showToast(error.message, 'error');
+        } catch (error: unknown) {
+            const err = error as Error;
+            showToast(err.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -216,8 +221,9 @@ export default function Admin() {
         try {
             await updateTheme(theme.id, { isActive: !theme.isActive });
             showToast(`Theme ${!theme.isActive ? 'enabled' : 'disabled'}`, 'success');
-        } catch (error: any) {
-            showToast(error.message, 'error');
+        } catch (error: unknown) {
+            const err = error as Error;
+            showToast(err.message, 'error');
         }
     };
 

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
 import { Theme } from '../utils/types';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 interface ThemeStore {
     themes: Theme[];
@@ -27,7 +28,7 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
 
             if (error) throw error;
 
-            const formattedThemes: Theme[] = data.map((t) => ({
+            const formattedThemes: Theme[] = (data || []).map((t) => ({
                 id: t.id,
                 name: t.name,
                 emoji: t.emoji,
@@ -43,16 +44,17 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
             }));
 
             set({ themes: formattedThemes, isLoading: false });
-        } catch (err: any) {
+        } catch (err: unknown) {
+            const error = err as Error;
             console.error('Error fetching themes:', err);
-            set({ error: err.message, isLoading: false });
+            set({ error: error.message, isLoading: false });
         }
     },
     subscribeToThemes: () => {
         console.log('🔗 [ThemeStore] Subscribing to themes realtime changes...');
 
         let pollInterval: NodeJS.Timeout | null = null;
-        let channel: any = null;
+        let channel: RealtimeChannel | null = null;
 
         const startPolling = () => {
             console.warn('⚠️ [ThemeStore] Using polling fallback for themes');
@@ -131,14 +133,15 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
 
             if (error) throw error;
             await get().fetchThemes();
-        } catch (err: any) {
-            console.error('Error adding theme:', err);
-            throw err;
+        } catch (err: unknown) {
+            const error = err as Error;
+            console.error('Error adding theme:', error);
+            throw error;
         }
     },
     updateTheme: async (id, updates) => {
         try {
-            const dbUpdates: any = {};
+            const dbUpdates: Record<string, string | boolean | number | undefined> = {};
             if (updates.name) dbUpdates.name = updates.name;
             if (updates.emoji) dbUpdates.emoji = updates.emoji;
             if (updates.description) dbUpdates.description = updates.description;
@@ -159,9 +162,10 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
 
             if (error) throw error;
             await get().fetchThemes();
-        } catch (err: any) {
-            console.error('Error updating theme:', err);
-            throw err;
+        } catch (err: unknown) {
+            const error = err as Error;
+            console.error('Error updating theme:', error);
+            throw error;
         }
     },
     deleteTheme: async (id) => {
@@ -169,9 +173,10 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
             const { error } = await supabase.from('themes').delete().eq('id', id);
             if (error) throw error;
             await get().fetchThemes();
-        } catch (err: any) {
-            console.error('Error deleting theme:', err);
-            throw err;
+        } catch (err: unknown) {
+            const error = err as Error;
+            console.error('Error deleting theme:', error);
+            throw error;
         }
     },
 }));

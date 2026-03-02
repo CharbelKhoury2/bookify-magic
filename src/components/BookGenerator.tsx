@@ -42,37 +42,19 @@ export const BookGenerator: React.FC = () => {
 
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const monitoringRef = React.useRef<Set<string>>(new Set());
 
-  // Initialization: Resume any pending generations after refresh
-  React.useEffect(() => {
-    Object.values(activeGenerations).forEach(gen => {
-      if (gen.status === 'pending') {
-        resumeMonitoring(gen.id);
-      }
-    });
+  const showToast = React.useCallback((message: string, type: ToastType = 'info') => {
+    setToast({ message, type });
   }, []);
 
-  const resumeMonitoring = async (id: string) => {
-    try {
-      const result = await resumeGenerationMonitoring(id, (p) => {
-        updateActiveGeneration(id, { progress: p, elapsedTime: Math.floor((Date.now() - activeGenerations[id].startTime) / 1000) });
-      });
-
-      if (result) {
-        handleGenerationSuccess(result, id);
-      }
-    } catch (err: any) {
-      console.error(`🛑 [RESUME] Failed to resume monitoring for ${id}:`, err);
-      updateActiveGeneration(id, { status: 'failed', error: err.message });
-      showToast(err.message || 'We lost the magical trail for one of your books!', 'error');
-    }
-  };
-
-  const showToast = (message: string, type: ToastType = 'info') => {
-    setToast({ message, type });
-  };
-
-  const handleGenerationSuccess = (result: any, generationId: string) => {
+  const handleGenerationSuccess = React.useCallback((result: {
+    pdfBlob?: Blob;
+    pdfUrl?: string;
+    coverImageUrl?: string;
+    pdfDownloadUrl?: string;
+    coverDownloadUrl?: string;
+  }, generationId: string) => {
     const { pdfBlob, pdfUrl, coverImageUrl, pdfDownloadUrl: downloadPdfUrl, coverDownloadUrl: downloadCoverUrl } = result;
 
     updateGenerationStatus(generationId, 'completed');
@@ -93,6 +75,7 @@ export const BookGenerator: React.FC = () => {
 
     const gen = activeGenerations[generationId];
     if (gen) {
+      console.log('📝 Saving completed book to history for:', gen.childName);
       addToHistory({
         childName: gen.childName,
         themeName: gen.theme.name,
@@ -103,14 +86,70 @@ export const BookGenerator: React.FC = () => {
         coverDownloadUrl: downloadCoverUrl
       });
       showToast(`✨ Magic complete! "${gen.childName}'s ${gen.theme.name}" is now in your library.`, 'success');
+    } else {
+      console.warn('⚠️ [SUCCESS] Could not find active generation metadata for ID:', generationId);
+      // Fallback: If metadata is lost, we still want to save it to history if possible
+      // but we don't have the childName/theme from the result object alone usually.
+      // However, we can try to extract it from the result if it was sent back.
+      if (result.childName && result.themeName) {
+        addToHistory({
+          childName: result.childName as string,
+          themeName: result.themeName as string,
+          themeEmoji: result.themeEmoji as string || '📚',
+          pdfUrl: finalPdfUrl,
+          thumbnailUrl: coverImageUrl || '',
+          pdfDownloadUrl: downloadPdfUrl,
+          coverDownloadUrl: downloadCoverUrl
+        });
+      }
     }
 
     updateActiveGeneration(generationId, { progress: 100, status: 'completed' });
 
     setTimeout(() => {
       removeActiveGeneration(generationId);
+      monitoringRef.current.delete(generationId);
     }, 5000);
-  };
+  }, [activeGenerations, addToHistory, removeActiveGeneration, setCoverDownloadUrl, setCoverImage, setPdfDownloadBlob, setPdfDownloadUrl, updateActiveGeneration, showToast]);
+
+  const resumeMonitoring = React.useCallback(async (id: string) => {
+    if (monitoringRef.current.has(id)) return;
+    monitoringRef.current.add(id);
+
+    try {
+      const result = await resumeGenerationMonitoring(id, (p) => {
+        updateActiveGeneration(id, { progress: p, elapsedTime: Math.floor((Date.now() - activeGenerations[id]?.startTime || Date.now()) / 1000) });
+      });
+
+      if (result) {
+        handleGenerationSuccess((result as { 
+          pdfBlob?: Blob;
+          pdfUrl?: string;
+          coverImageUrl?: string;
+          pdfDownloadUrl?: string;
+          coverDownloadUrl?: string;
+          childName?: string;
+          themeName?: string;
+          themeEmoji?: string;
+        }), id);
+      }
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error(`🛑 [RESUME] Failed to resume monitoring for ${id}:`, err);
+      updateActiveGeneration(id, { status: 'failed', error: error.message });
+      showToast(error.message || 'We lost the magical trail for one of your books!', 'error');
+      monitoringRef.current.delete(id);
+    }
+  }, [activeGenerations, updateActiveGeneration, handleGenerationSuccess, showToast]);
+
+  // Initialization: Resume any pending generations after refresh
+  React.useEffect(() => {
+    Object.values(activeGenerations).forEach(gen => {
+      if (gen.status === 'pending' && !monitoringRef.current.has(gen.id)) {
+        resumeMonitoring(gen.id);
+      }
+    });
+  }, [activeGenerations, resumeMonitoring]);
 
   const handleGenerate = async () => {
     const validation = validateBookData(childName, selectedTheme?.id || null, uploadedPhoto);
@@ -148,19 +187,20 @@ export const BookGenerator: React.FC = () => {
       // Start the actual generation process in the "background"
       runGeneration(generationId, newGen.childName, newGen.theme, currentPhoto, currentProcessed?.original);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const error = err as Error;
       console.error('🛑 [UI] Error initiating generation:', err);
       if (generationId) {
-        updateActiveGeneration(generationId, { status: 'failed', error: err.message });
+        updateActiveGeneration(generationId, { status: 'failed', error: error.message });
         await updateGenerationStatus(generationId, 'failed');
       }
-      showToast(err.message || 'The magic portal failed to open!', 'error');
+      showToast(error.message || 'The magic portal failed to open!', 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const runGeneration = async (id: string, name: string, theme: any, photo: File, photoBase64?: string) => {
+  const runGeneration = async (id: string, name: string, theme: Theme, photo: File, photoBase64?: string) => {
     try {
       const result = await startGenerationViaWebhook(
         name,
@@ -176,9 +216,10 @@ export const BookGenerator: React.FC = () => {
       if (result) {
         handleGenerationSuccess(result, id);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const error = err as Error;
       console.error(`🛑 [RUN] Generation failed for ${id}:`, err);
-      updateActiveGeneration(id, { status: 'failed', error: err.message });
+      updateActiveGeneration(id, { status: 'failed', error: error.message });
       await updateGenerationStatus(id, 'failed');
     }
   };

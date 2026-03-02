@@ -41,8 +41,8 @@ export async function generatePDF(
     
     onProgress?.(70);
     
-    // Generate PDF blob - cast to any to avoid strict type checking with @react-pdf/renderer
-    const blob = await pdf(documentElement as any).toBlob();
+    // Generate PDF blob - cast to React.ReactElement to avoid strict type checking with @react-pdf/renderer
+    const blob = await pdf(documentElement as React.ReactElement).toBlob();
     
     onProgress?.(100);
     

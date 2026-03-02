@@ -15,14 +15,18 @@ export default function Profile() {
 
     const handlePasswordReset = async () => {
         try {
+            setIsUpdating(true);
             if (!user?.email) return;
             const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
                 redirectTo: `${window.location.origin}/auth`,
             });
             if (error) throw error;
             showToast('Password reset email sent!', 'success');
-        } catch (error: any) {
-            showToast(error.message, 'error');
+        } catch (error: unknown) {
+            const err = error as Error;
+            showToast(err.message, 'error');
+        } finally {
+            setIsUpdating(false);
         }
     };
 

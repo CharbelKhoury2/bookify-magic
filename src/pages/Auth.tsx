@@ -76,9 +76,10 @@ export default function Auth() {
         
         navigate('/');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as Error;
       setMessage({
-        text: error.message || 'An error occurred',
+        text: err.message || 'An error occurred',
         type: 'error',
       });
     } finally {

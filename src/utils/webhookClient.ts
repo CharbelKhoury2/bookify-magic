@@ -27,41 +27,51 @@ export interface GenerationStatusResponse {
 /**
  * Logs the start of a generation in the database
  */
-export async function logGenerationStart(childName: string, themeId: string, themeName: string) {
-  const { data: { user } } = await supabase.auth.getUser();
+export async function logGenerationStart(
+  childName: string,
+  themeId: string,
+  themeName: string
+): Promise<string | null> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
 
-  const { data, error } = await supabase
-    .from('book_generations')
-    .insert({
-      child_name: childName,
-      theme_id: themeId,
-      theme_name: themeName,
-      user_id: user?.id || null,
-      status: 'pending'
-    })
-    .select()
-    .single();
+    const { data, error } = await supabase
+      .from('book_generations')
+      .insert({
+        child_name: childName,
+        theme_id: themeId,
+        theme_name: themeName,
+        user_id: user?.id || null,
+        status: 'pending',
+      })
+      .select()
+      .single();
 
-  if (error) {
-    console.error('❌ Failed to log generation start:', error);
+    if (error) throw error;
+    
+    console.log('📝 Generation logged in DB:', data?.id);
+    return data?.id || null;
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error('❌ Failed to log generation start:', err);
     return null;
   }
-
-  console.log('📝 Generation logged in DB:', data.id);
-  return data.id as string;
 }
 
 /**
  * Updates the status of a generation in the database
  */
-export async function updateGenerationStatus(id: string, status: 'completed' | 'failed') {
-  const { error } = await supabase
-    .from('book_generations')
-    .update({ status })
-    .eq('id', id);
+export async function updateGenerationStatus(generationId: string, status: 'pending' | 'completed' | 'failed') {
+  try {
+    const { error } = await supabase
+      .from('book_generations')
+      .update({ status })
+      .eq('id', generationId);
 
-  if (error) {
-    console.error('❌ Failed to update generation status:', error);
+    if (error) throw error;
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error('❌ Failed to update generation status:', err);
   }
 }
 
@@ -98,13 +108,13 @@ export async function startGenerationViaWebhook(
 
   try {
     // 2. Trigger the Edge Function
-    const { data: triggerData, error: triggerError } = await supabase.functions.invoke('generate-book', {
+    const { data: triggerData, error: triggerError } = await supabase.functions.invoke<{ status: string }>('generate-book', {
       body: payload
     });
 
     if (triggerError) {
       console.error('🛑 [GENERATOR] Edge Function Error:', triggerError);
-      let errorMsg = triggerError.message || 'Server error';
+      const errorMsg = triggerError.message || 'Server error';
       throw new Error(`Failed to start generation: ${errorMsg}`);
     }
 
@@ -114,9 +124,10 @@ export async function startGenerationViaWebhook(
     // 3. Start Polling the DATABASE using the specific generationId
     return monitorLibraryForResultById(generationId, onProgress);
 
-  } catch (err: any) {
-    console.error('🛑 [GENERATOR] Fatal Error:', err);
-    throw err;
+  } catch (err: unknown) {
+    const error = err as Error;
+    console.error('🛑 [GENERATOR] Fatal Error:', error);
+    throw error;
   }
 }
 
@@ -126,7 +137,15 @@ export async function startGenerationViaWebhook(
 async function monitorLibraryForResultById(
   generationId: string,
   onProgress?: (p: number) => void
-): Promise<any> {
+): Promise<{
+  pdfUrl: string;
+  coverImageUrl: string | null;
+  pdfDownloadUrl: string;
+  coverDownloadUrl: string | null;
+  childName?: string;
+  themeName?: string;
+  themeEmoji?: string;
+} | null> {
   const maxAttempts = 180; // 30 minutes (10s intervals)
   let attempts = 0;
 
@@ -149,11 +168,14 @@ async function monitorLibraryForResultById(
 
       if (!error && book) {
         // If n8n has updated the status to completed
-        if (book.status === 'completed' || (book as any).pdf_url || (book as any).generated_pdf_url) {
+        if (book.status === 'completed' || (book as { pdf_url?: string; generated_pdf_url?: string }).pdf_url || (book as { pdf_url?: string; generated_pdf_url?: string }).generated_pdf_url) {
           console.log('✅ [WATCHER] Magic complete! Opening book...');
 
-          let pdfUrl = (book as any).pdf_url || (book as any).generated_pdf_url || '';
-          let coverUrl = (book as any).thumbnail_url || (book as any).cover_image_url || (book as any).cover_url || (book as any).featured_image || '';
+          const pdfUrl = (book as { pdf_url?: string; generated_pdf_url?: string }).pdf_url || (book as { pdf_url?: string; generated_pdf_url?: string }).generated_pdf_url || '';
+          const coverUrl = (book as { thumbnail_url?: string; cover_image_url?: string; cover_url?: string; featured_image?: string }).thumbnail_url || 
+                           (book as { thumbnail_url?: string; cover_image_url?: string; cover_url?: string; featured_image?: string }).cover_image_url || 
+                           (book as { thumbnail_url?: string; cover_image_url?: string; cover_url?: string; featured_image?: string }).cover_url || 
+                           (book as { thumbnail_url?: string; cover_image_url?: string; cover_url?: string; featured_image?: string }).featured_image || '';
 
           // Google Drive Security Fix: Convert /view to /preview for embeddable preview
           if (pdfUrl.includes('drive.google.com') && pdfUrl.includes('/view')) {
@@ -169,8 +191,11 @@ async function monitorLibraryForResultById(
           return {
             pdfUrl: pdfUrl,
             coverImageUrl: coverUrl || null,
-            pdfDownloadUrl: (book as any).pdf_url || (book as any).generated_pdf_url,
-            coverDownloadUrl: (book as any).thumbnail_url || (book as any).cover_image_url || (book as any).cover_url,
+            pdfDownloadUrl: (book as { pdf_url?: string; generated_pdf_url?: string }).pdf_url || (book as { pdf_url?: string; generated_pdf_url?: string }).generated_pdf_url || '',
+            coverDownloadUrl: (book as { thumbnail_url?: string; cover_image_url?: string; cover_url?: string }).thumbnail_url || (book as { thumbnail_url?: string; cover_image_url?: string; cover_url?: string }).cover_image_url || (book as { thumbnail_url?: string; cover_image_url?: string; cover_url?: string }).cover_url || '',
+            childName: book.child_name,
+            themeName: book.theme_name,
+            themeEmoji: (book as any).theme_emoji || '📚',
           };
         }
 
@@ -178,9 +203,10 @@ async function monitorLibraryForResultById(
           throw new Error(book.error_message || 'The magic encountered a little breeze! Please try generating your story again. 🪄');
         }
       }
-    } catch (e: any) {
-      if (e.message?.includes('little breeze')) throw e;
-      console.warn('🔍 [WATCHER] DB check failed, retrying...', e);
+    } catch (e: unknown) {
+      const error = e as Error;
+      if (error.message?.includes('little breeze')) throw error;
+      console.warn('🔍 [WATCHER] DB check failed, retrying...', error);
     }
 
     await new Promise(r => setTimeout(r, 10000)); // Wait 10s between checks
@@ -195,7 +221,16 @@ async function monitorLibraryForResultById(
 export async function resumeGenerationMonitoring(
   generationId: string,
   onProgress?: (p: number) => void
-): Promise<any> {
+): Promise<{
+  pdfBlob?: Blob;
+  pdfUrl?: string;
+  coverImageUrl?: string;
+  pdfDownloadUrl?: string;
+  coverDownloadUrl?: string;
+  childName?: string;
+  themeName?: string;
+  themeEmoji?: string;
+} | null> {
   return monitorLibraryForResultById(generationId, onProgress);
 }
 
@@ -208,7 +243,14 @@ async function pollN8nExecution(
   apiKey: string,
   onProgress?: (p: number) => void,
   isWebhook: boolean = false
-): Promise<any> {
+): Promise<{
+  pdfUrl: string;
+  coverImageUrl: string;
+  pdfDownloadUrl: string;
+  coverDownloadUrl: string;
+  allStories: string[];
+  allCovers: string[];
+} | null> {
   if (!apiKey && !isWebhook) {
     throw new Error("n8n API Key is missing. Please set VITE_N8N_API_KEY.");
   }
@@ -317,16 +359,17 @@ async function pollN8nExecution(
           throw new Error('The AI workflow encountered an error in n8n.');
         }
       }
-    } catch (e: any) {
-      if (e.message?.includes('AI workflow encountered an error')) throw e;
+    } catch (e: unknown) {
+      const error = e as Error;
+      if (error.message?.includes('AI workflow encountered an error')) throw error;
       console.error('🔍 [POLL] Network/API Error:', {
-        message: e.message,
-        name: e.name,
-        stack: e.stack,
-        cause: e.cause
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+        cause: (error as Error & { cause?: unknown }).cause
       });
       // If it's a persistent fetch error, we might want to inform the user
-      if (attempts > 5 && (e.message?.includes('Failed to fetch') || e.message?.includes('NetworkError'))) {
+      if (attempts > 5 && (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError'))) {
         console.warn('⚠️ [POLL] Multiple network errors detected. This might be a CORS issue with the n8n Public API.');
       }
     }
@@ -345,7 +388,11 @@ async function monitorLibraryForResult(
   childName: string,
   themeName: string,
   onProgress?: (p: number) => void
-): Promise<any> {
+): Promise<{
+  pdfUrl: string;
+  coverImageUrl: string;
+  pdfDownloadUrl: string;
+} | null> {
   const maxAttempts = 120; // 20 minutes (10s intervals)
   let attempts = 0;
 
@@ -401,7 +448,10 @@ async function monitorLibraryForResult(
 async function pollDatabaseStatus(
   generationId: string,
   onProgress?: (p: number) => void
-): Promise<any> {
+): Promise<{
+  pdfUrl: string;
+  pdfDownloadUrl: string;
+} | null> {
   const maxAttempts = 180; // 30 minutes (10s intervals)
   let attempts = 0;
 
@@ -547,20 +597,13 @@ function base64ToBlob(base64: string, mime: string) {
 /**
  * Aggressively extracts a URL or Base64 data from a variety of object shapes
  */
-function extractFileData(obj: any): { url?: string, previewUrl?: string, downloadUrl?: string, base64?: string, blob?: Blob } {
+function extractFileData(obj: Record<string, unknown>): { url?: string, previewUrl?: string, downloadUrl?: string, base64?: string, blob?: Blob } {
   if (!obj) return {};
 
-  // If object is already a string
-  if (typeof obj === 'string') {
-    if (obj.startsWith('http')) return { url: obj };
-    if (obj.length > 200 || obj.includes(';base64,')) return { base64: obj };
-    return {};
-  }
-
-  // Handle Google Drive objects specifically
+  // 1. Handle Google Drive objects specifically
   if (obj.kind === 'drive#file' || obj.webContentLink || obj.webViewLink) {
-    const downloadUrl = obj.webContentLink;
-    let previewUrl = obj.webViewLink;
+    const downloadUrl = typeof obj.webContentLink === 'string' ? obj.webContentLink : undefined;
+    let previewUrl = typeof obj.webViewLink === 'string' ? obj.webViewLink : undefined;
 
     // Convert view link to preview link for iframes
     if (previewUrl && previewUrl.includes('/view')) {
@@ -568,13 +611,13 @@ function extractFileData(obj: any): { url?: string, previewUrl?: string, downloa
     }
 
     // Special handling for images: use the signed thumbnailLink from the API response
-    // (files may not be publicly shared, so constructed URLs won't work)
-    if (obj.mimeType?.startsWith('image/')) {
-      if (obj.thumbnailLink) {
+    if (typeof obj.mimeType === 'string' && obj.mimeType.startsWith('image/')) {
+      const thumbnailLink = typeof obj.thumbnailLink === 'string' ? obj.thumbnailLink : undefined;
+      if (thumbnailLink) {
         // Use the signed thumbnail link at a larger size
-        previewUrl = obj.thumbnailLink.replace(/=s\d+$/, '=s1000');
-      } else {
-        // Fallback: try the public thumbnail endpoint (only works if file is shared)
+        previewUrl = thumbnailLink.replace(/=s\d+$/, '=s1000');
+      } else if (typeof obj.id === 'string') {
+        // Fallback: try the public thumbnail endpoint
         previewUrl = `https://drive.google.com/thumbnail?id=${obj.id}&sz=w1000`;
       }
     }
@@ -586,28 +629,34 @@ function extractFileData(obj: any): { url?: string, previewUrl?: string, downloa
     };
   }
 
-  // 1. Check for nested images array (common in some backends)
-  if (obj.images?.[0]?.url) return { url: obj.images[0].url };
-  if (obj.images?.[0]?.data) return { base64: obj.images[0].data };
+  // 2. Check for nested images array (common in some backends)
+  const images = obj.images as Array<Record<string, unknown>> | undefined;
+  if (Array.isArray(images) && images.length > 0) {
+    const firstImage = images[0];
+    if (typeof firstImage.url === 'string') return { url: firstImage.url };
+    if (typeof firstImage.data === 'string') return { base64: firstImage.data };
+  }
 
-  // 2. Check for standard URL fields
-  const urlFields = ['url', 'webContentLink', 'webViewLink', 'link', 'href', 'downloadUrl', 'previewUrl', 'contentUrl', 'file', 'attachment'];
+  // 3. Check for standard URL fields
+  const urlFields = ['url', 'webContentLink', 'webViewLink', 'link', 'href', 'downloadUrl', 'previewUrl', 'contentUrl', 'file', 'attachment', 'pdf_url', 'generated_pdf_url'];
   for (const field of urlFields) {
-    if (typeof obj[field] === 'string' && obj[field].startsWith('http')) {
-      return { url: obj[field] };
+    const val = obj[field];
+    if (typeof val === 'string' && val.startsWith('http')) {
+      return { url: val };
     }
   }
 
-  // 3. Check for standard Base64/Data fields
+  // 4. Check for standard Base64/Data fields
   const dataFields = ['data', 'base64', 'content', 'pdfBase64', 'fileContent', 'image_data', 'binary', 'output', 'body'];
   for (const field of dataFields) {
-    if (typeof obj[field] === 'string' && (obj[field].length > 100 || obj[field].includes(';base64,'))) {
-      return { base64: obj[field] };
+    const val = obj[field];
+    if (typeof val === 'string' && (val.length > 100 || val.includes(';base64,'))) {
+      return { base64: val };
     }
   }
 
-  // 4. If it's a blob-like helper from our own postJson
-  if (obj.pdfBlob) return { blob: obj.pdfBlob };
+  // 5. If it's a blob-like helper from our own postJson
+  if (obj.pdfBlob instanceof Blob) return { blob: obj.pdfBlob };
 
   return {};
 }

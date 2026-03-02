@@ -102,9 +102,9 @@ export const BookGenerator: React.FC = () => {
         pdfDownloadUrl: downloadPdfUrl,
         coverDownloadUrl: downloadCoverUrl
       });
+      showToast(`✨ Magic complete! "${gen.childName}'s ${gen.theme.name}" is now in your library.`, 'success');
     }
 
-    setGeneratedPDF(finalPdfUrl);
     updateActiveGeneration(generationId, { progress: 100, status: 'completed' });
 
     setTimeout(() => {

@@ -28,6 +28,9 @@ import { Toast, ToastType } from '@/components/Toast';
 import { Link } from 'react-router-dom';
 import { useThemeStore } from '@/store/themeStore';
 
+import { useBookStore } from '@/store/bookStore';
+import { useHistoryStore } from '@/store/historyStore';
+
 type AdminTab = 'users' | 'themes' | 'settings' | 'profile';
 
 export default function Admin() {
@@ -40,6 +43,8 @@ export default function Admin() {
     const [newUser, setNewUser] = useState({ email: '', password: '', role: 'user' as AppRole });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { themes, fetchThemes, addTheme, updateTheme, deleteTheme, isLoading: themesLoading } = useThemeStore();
+    const { resetAll: resetBookStore } = useBookStore();
+    const { clearHistory, clearDeletedHistory } = useHistoryStore();
     const [isAddingTheme, setIsAddingTheme] = useState(false);
     const [editingTheme, setEditingTheme] = useState<Theme | null>(null);
     const [themeForm, setThemeForm] = useState<Partial<Theme>>({
@@ -468,6 +473,30 @@ export default function Admin() {
                                         <input type="checkbox" className="accent-primary" />
                                     </div>
                                 </div>
+                            </div>
+
+                            <div className="card-magical space-y-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
+                                        <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" />
+                                    </div>
+                                    <h3 className="font-bold text-lg text-red-600 dark:text-red-400">Master Reset</h3>
+                                </div>
+                                <p className="text-sm text-muted-foreground">Clear all application state including form data, active generations, and history.</p>
+                                <button
+                                    onClick={() => {
+                                        if (window.confirm('🚨 MASTER RESET: Are you sure you want to clear EVERYTHING? (Form data, active generations, and library history will be lost)')) {
+                                            resetBookStore();
+                                            clearHistory();
+                                            clearDeletedHistory();
+                                            showToast('🚨 Full application reset complete! All magic has been cleared.', 'success');
+                                        }
+                                    }}
+                                    className="w-full py-3 rounded-xl border-2 border-red-500/30 text-red-500 font-bold hover:bg-red-500/10 hover:border-red-500 transition-all flex items-center justify-center gap-2"
+                                >
+                                    <RotateCcw className="w-4 h-4" />
+                                    Reset Everything
+                                </button>
                             </div>
 
                             <div className="card-magical space-y-4">

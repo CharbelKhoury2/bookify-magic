@@ -63,26 +63,8 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
     }
   };
 
-  if (Object.keys(activeGenerations).length === 0 && !generatedPDF) {
+  if (!generatedPDF) {
     return null;
-  }
-
-  if (Object.keys(activeGenerations).length > 0 && !generatedPDF) {
-    return (
-      <div className="card-magical flex flex-col items-center justify-center py-12 animate-fade-in relative overflow-hidden">
-        <div className="premium-blur -top-20 -right-20 opacity-30" />
-        <div className="relative mb-6">
-          <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl animate-pulse" />
-          <LoadingSpinner size="lg" />
-        </div>
-        <h3 className="text-xl font-bold text-foreground mb-2">
-          Magic is in the air! ✨
-        </h3>
-        <p className="text-muted-foreground text-center max-w-xs">
-          Your story is being crafted. You can see the progress in "My Library" and even start another one while you wait!
-        </p>
-      </div>
-    );
   }
 
   if (generatedPDF) {

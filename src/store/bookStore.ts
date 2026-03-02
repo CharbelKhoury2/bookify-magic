@@ -30,6 +30,7 @@ interface BookStore {
   setCurrentGenerationId: (id: string | null) => void;
   loadBook: (data: HistoryItem) => void;
   reset: () => void;
+  resetAll: () => void;
 }
 
 export const useBookStore = create<BookStore>()(
@@ -84,6 +85,20 @@ export const useBookStore = create<BookStore>()(
         selectedTheme: null,
         uploadedPhoto: null,
         processedPhoto: null,
+        generatedPDF: null,
+        coverImage: null,
+        pdfDownloadUrl: null,
+        pdfDownloadBlob: null,
+        coverDownloadUrl: null,
+        currentGenerationId: null,
+        photoName: null,
+      }),
+      resetAll: () => set({
+        childName: '',
+        selectedTheme: null,
+        uploadedPhoto: null,
+        processedPhoto: null,
+        activeGenerations: {},
         generatedPDF: null,
         coverImage: null,
         pdfDownloadUrl: null,

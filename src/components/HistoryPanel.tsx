@@ -30,7 +30,7 @@ export const HistoryPanel: React.FC = () => {
     clearHistory,
     clearDeletedHistory
   } = useHistoryStore();
-  const { loadBook, activeGenerations, childName, selectedTheme, processedPhoto } = useBookStore();
+  const { loadBook, activeGenerations, childName, selectedTheme, processedPhoto, resetAll } = useBookStore();
   const { toast } = useToast();
   const [viewingBook, setViewingBook] = React.useState<HistoryItem | null>(null);
   const [view, setView] = React.useState<'active' | 'trash'>('active');
@@ -102,49 +102,74 @@ export const HistoryPanel: React.FC = () => {
           </button>
         </div>
 
-        {view === 'active' ? (
-          history.length > 0 && (
+        <div className="flex items-center gap-2">
+          {Object.keys(activeGenerations).length > 0 && (
             <button
               onClick={() => confirm({
-                title: "Clear all active books?",
-                description: "This will move all your current books to the trash. You can still restore them later.",
-                actionLabel: "Clear all",
-                onConfirm: () => {
-                  clearHistory();
-                  toast({
-                    title: "History Cleared",
-                    description: "All books have been moved to the trash.",
-                  });
-                },
-              })}
-              className="text-xs text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded hover:bg-destructive/5"
-            >
-              Clear active
-            </button>
-          )
-        ) : (
-          deletedHistory.length > 0 && (
-            <button
-              onClick={() => confirm({
-                title: "Empty Trash?",
-                description: "This will permanently delete all books in your trash. This action cannot be undone.",
-                actionLabel: "Empty Trash",
+                title: "Cancel all active magic?",
+                description: "This will stop tracking all current book generations. The process on the server may still continue, but you won't see them here.",
+                actionLabel: "Reset All",
                 isDestructive: true,
                 onConfirm: () => {
-                  clearDeletedHistory();
+                  resetAll();
                   toast({
-                    title: "Trash Emptied",
-                    description: "All deleted books have been permanently removed.",
-                    variant: "destructive",
+                    title: "Magic Reset",
+                    description: "All active generation trackers have been cleared.",
                   });
                 },
               })}
-              className="text-xs text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded hover:bg-destructive/5"
+              className="text-xs text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded hover:bg-destructive/5 flex items-center gap-1"
+              title="Clear all active generations"
             >
-              Empty trash
+              <RotateCcw className="w-3 h-3" />
+              Reset All
             </button>
-          )
-        )}
+          )}
+
+          {view === 'active' ? (
+            history.length > 0 && (
+              <button
+                onClick={() => confirm({
+                  title: "Clear all active books?",
+                  description: "This will move all your current books to the trash. You can still restore them later.",
+                  actionLabel: "Clear all",
+                  onConfirm: () => {
+                    clearHistory();
+                    toast({
+                      title: "History Cleared",
+                      description: "All books have been moved to the trash.",
+                    });
+                  },
+                })}
+                className="text-xs text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded hover:bg-destructive/5"
+              >
+                Clear active
+              </button>
+            )
+          ) : (
+            deletedHistory.length > 0 && (
+              <button
+                onClick={() => confirm({
+                  title: "Empty Trash?",
+                  description: "This will permanently delete all books in your trash. This action cannot be undone.",
+                  actionLabel: "Empty Trash",
+                  isDestructive: true,
+                  onConfirm: () => {
+                    clearDeletedHistory();
+                    toast({
+                      title: "Trash Emptied",
+                      description: "All deleted books have been permanently removed.",
+                      variant: "destructive",
+                    });
+                  },
+                })}
+                className="text-xs text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded hover:bg-destructive/5"
+              >
+                Empty trash
+              </button>
+            )
+          )}
+        </div>
       </div>
 
       <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
@@ -164,20 +189,21 @@ export const HistoryPanel: React.FC = () => {
                       <p className="text-[10px] text-primary/60 font-medium uppercase tracking-tighter">
                         {gen.status === 'failed' ? 'Magic Failed' : 'Creating Magic...'}
                       </p>
-                      <span className="text-[10px] font-mono text-primary/60">
-                        {Math.floor(gen.progress)}%
-                      </span>
+                      {gen.status !== 'failed' && (
+                        <div className="flex items-center gap-1">
+                          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
+                          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
+                          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
                 {gen.status === 'failed' ? (
                   <p className="text-[10px] text-destructive font-medium px-1">{gen.error || 'Unknown error'}</p>
                 ) : (
-                  <div className="w-full h-1.5 bg-primary/10 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-primary transition-all duration-500 ease-out"
-                      style={{ width: `${gen.progress}%` }}
-                    />
+                  <div className="w-full h-1 bg-primary/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-primary/40 animate-pulse-slow" style={{ width: '100%' }} />
                   </div>
                 )}
               </div>

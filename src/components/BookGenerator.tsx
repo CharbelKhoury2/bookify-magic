@@ -9,10 +9,11 @@ import { useBookStore } from '../store/bookStore';
 import { useHistoryStore } from '../store/historyStore';
 import { validateBookData } from '../utils/validators';
 import { downloadPDF, sanitizeFileName } from '../utils/pdfGenerator';
-import { startGenerationViaWebhook, logGenerationStart, updateGenerationStatus, resumeGenerationMonitoring, syncCompletedGenerations } from '../utils/webhookClient';
+import { startGenerationViaWebhook, logGenerationStart, updateGenerationStatus, resumeGenerationMonitoring, syncCompletedGenerations, getPdfUrlForGeneration } from '../utils/webhookClient';
 import { safeOpen } from '../utils/security';
 import { forceDownload } from '../utils/imageUtils';
-import { Theme } from '../utils/types';
+import { Theme, HistoryItem } from '../utils/types';
+import { supabase } from '@/integrations/supabase/client';
 
 export const BookGenerator: React.FC = () => {
   const {
@@ -164,23 +165,50 @@ export const BookGenerator: React.FC = () => {
       if (!gen) return;
 
       if (status === 'completed') {
+        console.log(`✅ [SYNC] Generation ${generationId} completed, adding to library...`);
+        
         // Try to get the completed data from database
         try {
           const result = await resumeGenerationMonitoring(generationId);
           if (result) {
             handleGenerationSuccess(result, generationId);
+            console.log(`✅ [SYNC] Successfully added ${generationId} to library`);
           } else {
-            // Fallback: just update status
-            updateActiveGeneration(generationId, { status: 'completed', progress: 100 });
-            setTimeout(() => {
-              removeActiveGeneration(generationId);
-              monitoringRef.current.delete(generationId);
-            }, 5000);
+            // Fallback: Create library entry from database data
+            const pdfData = await getPdfUrlForGeneration(generationId);
+            if (pdfData) {
+              const libraryItem: HistoryItem = {
+                id: generationId,
+                childName: pdfData.childName,
+                themeName: pdfData.themeName,
+                themeEmoji: pdfData.themeEmoji,
+                timestamp: Date.now(),
+                pdfUrl: pdfData.pdfUrl,
+                thumbnailUrl: pdfData.coverImageUrl || '',
+                pdfDownloadUrl: pdfData.pdfDownloadUrl,
+                coverDownloadUrl: pdfData.coverDownloadUrl
+              };
+              
+              addToHistory(libraryItem);
+              console.log(`✅ [SYNC] Added ${generationId} to library via fallback`);
+              
+              // Update and remove from active
+              updateActiveGeneration(generationId, { status: 'completed', progress: 100 });
+              setTimeout(() => {
+                removeActiveGeneration(generationId);
+                monitoringRef.current.delete(generationId);
+              }, 5000);
+            } else {
+              console.warn(`⚠️ [SYNC] Could not get PDF data for ${generationId}`);
+              updateActiveGeneration(generationId, { status: 'completed', progress: 100 });
+            }
           }
         } catch (err) {
-          console.error('Failed to handle completed generation:', err);
+          console.error('❌ [SYNC] Failed to handle completed generation:', err);
+          updateActiveGeneration(generationId, { status: 'completed', progress: 100 });
         }
       } else if (status === 'failed') {
+        console.log(`❌ [SYNC] Generation ${generationId} failed`);
         updateActiveGeneration(generationId, { status: 'failed', error });
         monitoringRef.current.delete(generationId);
       }
@@ -188,18 +216,89 @@ export const BookGenerator: React.FC = () => {
 
     // Initial sync
     if (Object.keys(activeGenerations).length > 0) {
+      console.log(`🔄 [SYNC] Checking ${Object.keys(activeGenerations).length} active generations...`);
       syncCompletedGenerations(activeGenerations, syncStatus);
     }
 
-    // Set up periodic polling every 30 seconds
+    // Set up periodic polling every 30 seconds to check for completed books
     const interval = setInterval(() => {
       if (Object.keys(activeGenerations).length > 0) {
+        console.log(`🔄 [SYNC] Periodic check for ${Object.keys(activeGenerations).length} active generations...`);
         syncCompletedGenerations(activeGenerations, syncStatus);
       }
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [activeGenerations, handleGenerationSuccess, removeActiveGeneration, resumeGenerationMonitoring, syncCompletedGenerations, updateActiveGeneration]);
+  }, [activeGenerations, handleGenerationSuccess, removeActiveGeneration, resumeGenerationMonitoring, syncCompletedGenerations, updateActiveGeneration, addToHistory]);
+
+  // Background sync: Check for completed books that might have been missed
+  React.useEffect(() => {
+    const backgroundSync = async () => {
+      try {
+        console.log('🔍 [BACKGROUND] Checking for any missed completed books...');
+        
+        // Get all completed books from database
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: completedBooks, error } = await supabase
+          .from('book_generations')
+          .select('*')
+          .eq('status', 'completed')
+          .eq('user_id', user?.id || null)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('❌ [BACKGROUND] Failed to fetch completed books:', error);
+          return;
+        }
+
+        if (!completedBooks || completedBooks.length === 0) {
+          console.log('🔍 [BACKGROUND] No completed books found in database');
+          return;
+        }
+
+        console.log(`🔍 [BACKGROUND] Found ${completedBooks.length} completed books in database`);
+
+        // Check if any completed books are missing from the library
+        const currentHistory = useHistoryStore.getState().history;
+        const currentHistoryIds = new Set(currentHistory.map(item => item.id));
+
+        for (const book of completedBooks) {
+          if (!currentHistoryIds.has(book.id)) {
+            console.log(`📚 [BACKGROUND] Adding missed book to library: ${book.id}`);
+            
+            // Get PDF data for this book
+            const pdfData = await getPdfUrlForGeneration(book.id);
+            if (pdfData) {
+              const libraryItem: HistoryItem = {
+                id: book.id,
+                childName: pdfData.childName,
+                themeName: pdfData.themeName,
+                themeEmoji: pdfData.themeEmoji,
+                timestamp: new Date(book.created_at).getTime(),
+                pdfUrl: pdfData.pdfUrl,
+                thumbnailUrl: pdfData.coverImageUrl || '',
+                pdfDownloadUrl: pdfData.pdfDownloadUrl,
+                coverDownloadUrl: pdfData.coverDownloadUrl
+              };
+              
+              addToHistory(libraryItem);
+              console.log(`✅ [BACKGROUND] Added missed book ${book.id} to library`);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('❌ [BACKGROUND] Error in background sync:', error);
+      }
+    };
+
+    // Run background sync every 2 minutes
+    const interval = setInterval(backgroundSync, 120000);
+    
+    // Also run it once on component mount
+    backgroundSync();
+
+    return () => clearInterval(interval);
+  }, [addToHistory]);
 
   const handleGenerate = async () => {
     const validation = validateBookData(childName, selectedTheme?.id || null, uploadedPhoto);

@@ -58,15 +58,9 @@ export const HistoryPanel: React.FC = () => {
     const loadData = async () => {
       setIsLoading(true);
       try {
-        // Debug: Check all book statuses
-        await debugAllBookStatuses();
-        
-        const [completed, trashed] = await Promise.all([
-          fetchCompletedBooks(),
-          fetchTrashedBooks()
-        ]);
+        // Only fetch completed books from database
+        const completed = await fetchCompletedBooks();
         setDatabaseBooks(completed);
-        setTrashedBooks(trashed);
       } catch (error) {
         console.error('Failed to load library data:', error);
       } finally {
@@ -81,7 +75,7 @@ export const HistoryPanel: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Use database books instead of local history for completed books
+  // Use database books for completed books, but local storage for trash
   const displayBooks = databaseBooks;
 
   const confirm = (config: Omit<typeof confirmConfig, 'isOpen'>) => {
@@ -144,13 +138,13 @@ export const HistoryPanel: React.FC = () => {
               ? 'bg-destructive/80 text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:bg-secondary/50'
               }`}
-            aria-label={`Show ${trashedBooks.length} deleted books in trash`}
+            aria-label={`Show ${deletedHistory.length} deleted books in trash`}
           >
             <Trash2 className="w-3.5 h-3.5" />
             Trash
             <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${view === 'trash' ? 'bg-primary-foreground/20' : 'bg-secondary'
               }`}>
-              {trashedBooks.length}
+              {deletedHistory.length}
             </span>
           </button>
         </div>
@@ -223,56 +217,22 @@ export const HistoryPanel: React.FC = () => {
               </button>
             )
           ) : (
-            trashedBooks.length > 0 && (
+            deletedHistory.length > 0 && (
               <button
-                onClick={() => {
-                  console.log('🗑️ [EMPTY TRASH] Button clicked, trashedBooks.length:', trashedBooks.length);
-                  confirm({
-                    title: "Empty Trash?",
-                    description: "This will permanently delete all books in your trash. This action cannot be undone.",
-                    actionLabel: "Empty Trash",
-                    isDestructive: true,
-                    onConfirm: async () => {
-                      console.log('🗑️ [EMPTY TRASH] Starting empty trash process...');
-                      console.log('🗑️ [EMPTY TRASH] Books to delete:', trashedBooks.length);
-                      
-                      // Permanently delete all trashed books
-                      let deletedCount = 0;
-                      let failedCount = 0;
-                      
-                      for (const book of trashedBooks) {
-                        console.log(`🗑️ [EMPTY TRASH] Deleting book: ${book.id} - ${book.childName}'s ${book.themeName}`);
-                        const success = await deleteBookFromDatabase(book.id);
-                        if (success) {
-                          deletedCount++;
-                          console.log(`✅ [EMPTY TRASH] Successfully deleted: ${book.id}`);
-                        } else {
-                          failedCount++;
-                          console.log(`❌ [EMPTY TRASH] Failed to delete: ${book.id}`);
-                        }
-                      }
-                      
-                      console.log(`🗑️ [EMPTY TRASH] Results: ${deletedCount} deleted, ${failedCount} failed`);
-                      
-                      // Clear trash state
-                      setTrashedBooks([]);
-                      
-                      if (failedCount > 0) {
-                        toast({
-                          title: "Partial Success",
-                          description: `${deletedCount} books permanently deleted, ${failedCount} failed.`,
-                          variant: "destructive",
-                        });
-                      } else {
-                        toast({
-                          title: "Trash Emptied",
-                          description: `All ${deletedCount} books have been permanently deleted.`,
-                          variant: "destructive",
-                        });
-                      }
-                    },
-                  });
-                }}
+                onClick={() => confirm({
+                  title: "Empty Trash?",
+                  description: "This will permanently delete all books in your trash. This action cannot be undone.",
+                  actionLabel: "Empty Trash",
+                  isDestructive: true,
+                  onConfirm: () => {
+                    clearDeletedHistory();
+                    toast({
+                      title: "Trash Emptied",
+                      description: "All deleted books have been permanently removed.",
+                      variant: "destructive",
+                    });
+                  },
+                })}
                 className="text-xs text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded hover:bg-destructive/5"
               >
                 Empty trash
@@ -337,25 +297,13 @@ export const HistoryPanel: React.FC = () => {
                 <HistoryCard
                   key={item.id}
                   item={item}
-                  onRemove={async () => {
-                    // Move to trash
-                    const success = await moveBookToTrash(item.id);
-                    
-                    if (success) {
-                      // Remove from active books and add to trash
-                      setDatabaseBooks(prev => prev.filter(book => book.id !== item.id));
-                      setTrashedBooks(prev => [item, ...prev]);
-                      toast({
-                        title: "Moved to Trash",
-                        description: `"${item.childName}'s Adventure" has been moved to trash.`,
-                      });
-                    } else {
-                      toast({
-                        title: "Move Failed",
-                        description: "Failed to move the book to trash. Please try again.",
-                        variant: "destructive",
-                      });
-                    }
+                  onRemove={() => {
+                    // Move to local storage trash (original approach)
+                    removeFromHistory(item.id);
+                    toast({
+                      title: "Moved to Trash",
+                      description: `"${item.childName}'s Adventure" has been moved to trash.`,
+                    });
                   }}
                   onClick={() => handleCardClick(item)}
                 />
@@ -363,57 +311,38 @@ export const HistoryPanel: React.FC = () => {
             )}
           </>
         ) : (
-          trashedBooks.length === 0 ? (
+          deletedHistory.length === 0 ? (
             <div className="text-center py-10 opacity-60">
               <Ghost className="w-8 h-8 mx-auto mb-2 text-muted-foreground/30" />
               <p className="text-sm font-medium text-muted-foreground">Trash is empty</p>
               <p className="text-[11px] text-muted-foreground">Deleted books stay here for a while</p>
             </div>
           ) : (
-            trashedBooks.map((item) => (
+            deletedHistory.map((item) => (
               <HistoryCard
                 key={item.id}
                 item={item}
                 isTrash
-                onRemove={async () => {
-                  // Permanently delete from database
-                  const success = await deleteBookFromDatabase(item.id);
-                  
-                  if (success) {
-                    // Remove from trash state
-                    setTrashedBooks(prev => prev.filter(book => book.id !== item.id));
+                onRemove={() => confirm({
+                  title: "Permanently delete this book?",
+                  description: `Are you sure you want to delete "${item.childName}'s Adventure"? This action cannot be undone.`,
+                  actionLabel: "Delete Forever",
+                  isDestructive: true,
+                  onConfirm: () => {
+                    permanentlyDeleteFromHistory(item.id);
                     toast({
-                      title: "Permanently Deleted",
-                      description: `"${item.childName}'s Adventure" has been permanently deleted.`,
+                      title: "Book Deleted",
+                      description: "The book has been permanently removed.",
                       variant: "destructive",
                     });
-                  } else {
-                    toast({
-                      title: "Delete Failed",
-                      description: "Failed to permanently delete the book. Please try again.",
-                      variant: "destructive",
-                    });
-                  }
-                }}
-                onRestore={async () => {
-                  // Restore from trash
-                  const success = await restoreBookFromTrash(item.id);
-                  
-                  if (success) {
-                    // Move from trash back to active books
-                    setTrashedBooks(prev => prev.filter(book => book.id !== item.id));
-                    setDatabaseBooks(prev => [item, ...prev]);
-                    toast({
-                      title: "Book Restored",
-                      description: `"${item.childName}'s Adventure" has been restored to your library.`,
-                    });
-                  } else {
-                    toast({
-                      title: "Restore Failed",
-                      description: "Failed to restore the book. Please try again.",
-                      variant: "destructive",
-                    });
-                  }
+                  },
+                })}
+                onRestore={() => {
+                  restoreFromHistory(item.id);
+                  toast({
+                    title: "Book Restored",
+                    description: "The book is back in your library.",
+                  });
                 }}
                 onClick={() => { }} // No click in trash
               />

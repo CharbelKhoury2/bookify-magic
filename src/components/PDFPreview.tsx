@@ -13,20 +13,17 @@ interface PDFPreviewProps {
 
 export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
   const {
-    isGenerating,
+    activeGenerations,
     generatedPDF,
     coverImage,
     childName,
     selectedTheme,
     pdfDownloadUrl,
     coverDownloadUrl,
-    elapsedTime,
-    generationProgress,
     pdfDownloadBlob
   } = useBookStore();
 
   const [isImageModalOpen, setIsImageModalOpen] = React.useState(false);
-  const [coverRetryCount, setCoverRetryCount] = React.useState(0);
 
   // Use the image utility to get a reliable thumbnail
   const effectiveCoverUrl = React.useMemo(() => {
@@ -46,17 +43,8 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
     return getEmbedUrl(generatedPDF);
   }, [generatedPDF]);
 
-  // Format elapsed time as MM:SS
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
   const handleCoverImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
     console.warn(`🖼️ Cover image failed to load:`, e.currentTarget.src);
-    // If it's already using the thumbnail endpoint and failed, there's not much we can do
-    // but we can try to hide it or show a placeholder
   };
 
   const handleDownloadCover = () => {
@@ -75,11 +63,11 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
     }
   };
 
-  if (!isGenerating && !generatedPDF) {
+  if (Object.keys(activeGenerations).length === 0 && !generatedPDF) {
     return null;
   }
 
-  if (isGenerating) {
+  if (Object.keys(activeGenerations).length > 0 && !generatedPDF) {
     return (
       <div className="card-magical flex flex-col items-center justify-center py-12 animate-fade-in relative overflow-hidden">
         <div className="premium-blur -top-20 -right-20 opacity-30" />
@@ -88,38 +76,11 @@ export const PDFPreview: React.FC<PDFPreviewProps> = ({ onDownload }) => {
           <LoadingSpinner size="lg" />
         </div>
         <h3 className="text-xl font-bold text-foreground mb-2">
-          Creating Your Magical Book ✨
+          Magic is in the air! ✨
         </h3>
-        <p className="text-muted-foreground text-center max-w-xs mb-10">
-          Crafting beautiful pages with your story...
+        <p className="text-muted-foreground text-center max-w-xs">
+          Your story is being crafted. You can see the progress in "My Library" and even start another one while you wait!
         </p>
-
-        {/* Elapsed Timer */}
-        <div className="flex flex-col items-center mb-10">
-          <div className="flex items-center gap-2 px-5 py-2 rounded-2xl bg-primary/10 border-2 border-primary/20 shadow-sm animate-pulse">
-            <Clock className="w-5 h-5 text-primary" />
-            <span className="text-primary font-mono font-bold text-2xl tracking-tighter">
-              {formatTime(elapsedTime)}
-            </span>
-          </div>
-          <span className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] mt-3 font-black opacity-70">
-            Time Elapsed
-          </span>
-        </div>
-
-        {/* Force Cancel Button */}
-        <button
-          onClick={() => {
-            const { reset } = useBookStore.getState();
-            if (window.confirm("Are you sure you want to cancel the generation? This process cannot be resumed.")) {
-              reset();
-            }
-          }}
-          className="px-6 py-2.5 rounded-xl border-2 border-destructive/30 text-destructive font-bold hover:bg-destructive/5 hover:border-destructive/60 transition-all flex items-center gap-2 group text-sm"
-        >
-          <RotateCcw className="w-4 h-4 group-hover:rotate-[-180deg] transition-transform duration-500" />
-          Cancel & Start Over
-        </button>
       </div>
     );
   }

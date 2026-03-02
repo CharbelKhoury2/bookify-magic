@@ -30,7 +30,7 @@ export const HistoryPanel: React.FC = () => {
     clearHistory,
     clearDeletedHistory
   } = useHistoryStore();
-  const { loadBook, isGenerating, childName, selectedTheme, processedPhoto } = useBookStore();
+  const { loadBook, activeGenerations, childName, selectedTheme, processedPhoto } = useBookStore();
   const { toast } = useToast();
   const [viewingBook, setViewingBook] = React.useState<HistoryItem | null>(null);
   const [view, setView] = React.useState<'active' | 'trash'>('active');
@@ -150,26 +150,40 @@ export const HistoryPanel: React.FC = () => {
       <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
         {view === 'active' ? (
           <>
-            {isGenerating && (
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border-2 border-primary/20 animate-pulse cursor-wait">
-                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
-                  {processedPhoto?.thumbnail ? (
-                    <img src={processedPhoto.thumbnail} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-xl">✨</span>
-                  )}
+            {Object.values(activeGenerations).map((gen) => (
+              <div key={gen.id} className="flex flex-col gap-2 p-3 rounded-xl bg-primary/5 border-2 border-primary/20 animate-fade-in">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
+                    <span className="text-xl">{gen.theme.emoji}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-primary text-sm truncate">
+                      {gen.childName}'s {gen.theme.name}
+                    </h4>
+                    <div className="flex justify-between items-center mt-1">
+                      <p className="text-[10px] text-primary/60 font-medium uppercase tracking-tighter">
+                        {gen.status === 'failed' ? 'Magic Failed' : 'Creating Magic...'}
+                      </p>
+                      <span className="text-[10px] font-mono text-primary/60">
+                        {Math.floor(gen.progress)}%
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-semibold text-primary text-sm truncate">
-                    {childName || 'New'}'s {selectedTheme?.name || 'Story'}
-                  </h4>
-                  <p className="text-[10px] text-primary/60 font-medium uppercase tracking-tighter">Creating Magic...</p>
-                </div>
-                <div className="w-2 h-2 rounded-full bg-primary animate-ping" />
+                {gen.status === 'failed' ? (
+                  <p className="text-[10px] text-destructive font-medium px-1">{gen.error || 'Unknown error'}</p>
+                ) : (
+                  <div className="w-full h-1.5 bg-primary/10 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary transition-all duration-500 ease-out"
+                      style={{ width: `${gen.progress}%` }}
+                    />
+                  </div>
+                )}
               </div>
-            )}
+            ))}
 
-            {history.length === 0 && !isGenerating ? (
+            {history.length === 0 && Object.keys(activeGenerations).length === 0 ? (
               <div className="text-center py-10 opacity-60">
                 <div className="text-3xl mb-2">📚</div>
                 <p className="text-sm font-medium">Your library is empty</p>

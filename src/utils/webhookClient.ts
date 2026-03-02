@@ -69,6 +69,7 @@ export async function startGenerationViaWebhook(
   childName: string,
   theme: Theme,
   photoFile: File,
+  generationId: string,
   onProgress?: (p: number) => void,
   preProcessedPhotoBase64?: string
 ): Promise<{
@@ -82,12 +83,6 @@ export async function startGenerationViaWebhook(
   // Use pre-processed photo if available, otherwise process the file
   const photoBase64 = preProcessedPhotoBase64 || await imageToBase64(photoFile);
   onProgress?.(15);
-
-  // 1. Log the start of generation in DB to get a unique generationId
-  const generationId = await logGenerationStart(childName.trim(), theme.id, theme.name);
-  if (!generationId) {
-    throw new Error('Our crystal ball is cloudy! We couldn\'t initialize your magical book. Please try again in a moment. ✨');
-  }
 
   const payload = {
     generationId,
@@ -103,7 +98,6 @@ export async function startGenerationViaWebhook(
 
   try {
     // 2. Trigger the Edge Function
-    // We use invoke to call the 'generate-book' function
     const { data: triggerData, error: triggerError } = await supabase.functions.invoke('generate-book', {
       body: payload
     });
@@ -111,18 +105,6 @@ export async function startGenerationViaWebhook(
     if (triggerError) {
       console.error('🛑 [GENERATOR] Edge Function Error:', triggerError);
       let errorMsg = triggerError.message || 'Server error';
-
-      // Attempt to extract more specific error from response if available
-      try {
-        if ('context' in triggerError && (triggerError as any).context?.json) {
-          const context = (triggerError as any).context.json;
-          if (context.error) errorMsg = context.error;
-          if (context.details) console.warn('🔍 [GENERATOR] Error Details:', context.details);
-        }
-      } catch (e) {
-        console.warn('Could not parse error context');
-      }
-
       throw new Error(`Failed to start generation: ${errorMsg}`);
     }
 
@@ -130,7 +112,6 @@ export async function startGenerationViaWebhook(
     onProgress?.(30);
 
     // 3. Start Polling the DATABASE using the specific generationId
-    // This is the most efficient way as we know exactly which record to watch
     return monitorLibraryForResultById(generationId, onProgress);
 
   } catch (err: any) {

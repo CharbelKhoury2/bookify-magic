@@ -20,10 +20,10 @@ export const BookGenerator: React.FC = () => {
     selectedTheme,
     uploadedPhoto,
     processedPhoto,
-    isGenerating,
-    setIsGenerating,
-    generationProgress,
-    setGenerationProgress,
+    activeGenerations,
+    addActiveGeneration,
+    updateActiveGeneration,
+    removeActiveGeneration,
     generatedPDF,
     setGeneratedPDF,
     coverImage,
@@ -34,107 +34,52 @@ export const BookGenerator: React.FC = () => {
     setPdfDownloadBlob,
     coverDownloadUrl,
     setCoverDownloadUrl,
-    currentGenerationId,
     setCurrentGenerationId,
-    elapsedTime,
-    setElapsedTime,
     reset
   } = useBookStore();
 
   const { addToHistory } = useHistoryStore();
 
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
-  const [generatedBlob, setGeneratedBlob] = useState<Blob | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Timer logic for generation
+  // Initialization: Resume any pending generations after refresh
   React.useEffect(() => {
-    let interval: NodeJS.Timeout;
-
-    if (isGenerating) {
-      setElapsedTime(0); // Reset timer at start
-      interval = setInterval(() => {
-        setElapsedTime((prev) => prev + 1);
-      }, 1000);
-    }
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isGenerating, setElapsedTime]);
-
-  // Prevention for accidental refresh during generation
-  React.useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isGenerating) {
-        e.preventDefault();
-        e.returnValue = ''; // Standard way to show "Are you sure you want to leave?"
-        return '';
+    Object.values(activeGenerations).forEach(gen => {
+      if (gen.status === 'pending') {
+        resumeMonitoring(gen.id);
       }
-    };
+    });
+  }, []);
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isGenerating]);
+  const resumeMonitoring = async (id: string) => {
+    try {
+      const result = await resumeGenerationMonitoring(id, (p) => {
+        updateActiveGeneration(id, { progress: p, elapsedTime: Math.floor((Date.now() - activeGenerations[id].startTime) / 1000) });
+      });
+
+      if (result) {
+        handleGenerationSuccess(result, id);
+      }
+    } catch (err: any) {
+      console.error(`🛑 [RESUME] Failed to resume monitoring for ${id}:`, err);
+      updateActiveGeneration(id, { status: 'failed', error: err.message });
+      showToast(err.message || 'We lost the magical trail for one of your books!', 'error');
+    }
+  };
 
   const showToast = (message: string, type: ToastType = 'info') => {
     setToast({ message, type });
   };
 
-  // Initialization: If we were generating before refresh, check if we need to clean up
-  React.useEffect(() => {
-    if (isGenerating && currentGenerationId) {
-      console.log('🔄 Resuming generation state after refresh...', currentGenerationId);
-      showToast('The magic is still flowing! Please hold on just a moment... ✨', 'info');
-
-      const resumeMonitoring = async () => {
-        try {
-          const result = await resumeGenerationMonitoring(
-            currentGenerationId,
-            (p) => setGenerationProgress(p)
-          );
-
-          if (result) {
-            console.log('✨ [RESUME] Found results after refresh:', result);
-            handleGenerationSuccess(result, currentGenerationId);
-          }
-        } catch (err: any) {
-          console.error('🛑 [RESUME] Failed to resume monitoring:', err);
-          setIsGenerating(false);
-          setCurrentGenerationId(null);
-          showToast(err.message || 'We lost the magical trail! Please try refreshing or generating again.', 'error');
-        }
-      };
-
-      resumeMonitoring();
-
-      // Safety timeout: If it stays "generating" for too long without a result, reset it
-      // Increased to 2 hours to accommodate very long AI generations
-      const timer = setTimeout(() => {
-        if (isGenerating) {
-          setIsGenerating(false);
-          setCurrentGenerationId(null);
-          showToast('The magic portal is taking a long time to open. 🕰️ If it doesn\'t appear soon, please try again.', 'error');
-        }
-      }, 7200000); // 2 hours
-
-      return () => clearTimeout(timer);
-    }
-  }, []);
-
-  const handleGenerationSuccess = (result: any, generationId: string | null) => {
-    setGenerationProgress(98);
+  const handleGenerationSuccess = (result: any, generationId: string) => {
     const { pdfBlob, pdfUrl, coverImageUrl, pdfDownloadUrl: downloadPdfUrl, coverDownloadUrl: downloadCoverUrl } = result;
 
-    // Update DB to completed if we have an ID
-    if (generationId) {
-      updateGenerationStatus(generationId, 'completed');
-    }
+    updateGenerationStatus(generationId, 'completed');
 
     let finalPdfUrl: string | null = null;
     if (pdfBlob) {
-      const url = URL.createObjectURL(pdfBlob);
-      finalPdfUrl = url;
-      setGeneratedBlob(pdfBlob);
+      finalPdfUrl = URL.createObjectURL(pdfBlob);
       setPdfDownloadBlob(pdfBlob);
     } else if (pdfUrl) {
       finalPdfUrl = pdfUrl;
@@ -146,32 +91,28 @@ export const BookGenerator: React.FC = () => {
     if (downloadPdfUrl) setPdfDownloadUrl(downloadPdfUrl);
     if (downloadCoverUrl) setCoverDownloadUrl(downloadCoverUrl);
 
-    // Save to history
-    addToHistory({
-      childName: childName.trim(),
-      themeName: selectedTheme?.name || 'Magical Book',
-      themeEmoji: selectedTheme?.emoji || '✨',
-      pdfUrl: finalPdfUrl,
-      thumbnailUrl: coverImageUrl || processedPhoto?.thumbnail || '',
-      pdfDownloadUrl: downloadPdfUrl,
-      coverDownloadUrl: downloadCoverUrl
-    });
+    const gen = activeGenerations[generationId];
+    if (gen) {
+      addToHistory({
+        childName: gen.childName,
+        themeName: gen.theme.name,
+        themeEmoji: gen.theme.emoji,
+        pdfUrl: finalPdfUrl,
+        thumbnailUrl: coverImageUrl || '',
+        pdfDownloadUrl: downloadPdfUrl,
+        coverDownloadUrl: downloadCoverUrl
+      });
+    }
 
     setGeneratedPDF(finalPdfUrl);
-    setGenerationProgress(100);
+    updateActiveGeneration(generationId, { progress: 100, status: 'completed' });
 
-    // No modal anymore - just stop generating and show the preview
     setTimeout(() => {
-      setIsGenerating(false);
-      setCurrentGenerationId(null);
-      // setShowFinished(true); // Removed as per user request
-    }, 1500);
+      removeActiveGeneration(generationId);
+    }, 5000);
   };
 
   const handleGenerate = async () => {
-    // Safety guard: Don't allow multiple simultaneous calls
-    if (isGenerating) return;
-
     const validation = validateBookData(childName, selectedTheme?.id || null, uploadedPhoto);
     if (!validation.isValid) {
       showToast(validation.error || 'Please fill in all the magical ingredients! ✨', 'error');
@@ -180,54 +121,65 @@ export const BookGenerator: React.FC = () => {
 
     if (!selectedTheme || !uploadedPhoto) return;
 
+    setIsSubmitting(true);
     let generationId: string | null = null;
     try {
-      console.log('🚀 [UI] Starting generation process...');
-      setIsGenerating(true);
-      setGenerationProgress(0);
-      setCoverImage(null);
-      setPdfDownloadUrl(null);
-      setPdfDownloadBlob(null);
-      setCoverDownloadUrl(null);
-
-      // Log the start of generation in DB
       generationId = await logGenerationStart(childName.trim(), selectedTheme.id, selectedTheme.name);
-      setCurrentGenerationId(generationId);
+      if (!generationId) throw new Error("Failed to initialize magic");
 
-      console.log('📡 [UI] Calling webhook client (Detailed)...');
-      let result;
-      try {
-        result = await startGenerationViaWebhook(
-          childName.trim(),
-          selectedTheme,
-          uploadedPhoto,
-          (p) => {
-            console.log(`📊 [UI] Progress: ${p}%`);
-            setGenerationProgress(p);
-          },
-          processedPhoto?.original || undefined
-        );
+      const newGen = {
+        id: generationId,
+        childName: childName.trim(),
+        theme: selectedTheme,
+        progress: 0,
+        status: 'pending' as const,
+        startTime: Date.now(),
+        elapsedTime: 0
+      };
 
-        if (result) {
-          handleGenerationSuccess(result, generationId);
-        }
-      } catch (webhookError: any) {
-        console.error('🛑 [UI] Webhook execution failed:', webhookError);
-        throw webhookError; // Re-throw to be caught by the outer catch
-      }
+      addActiveGeneration(newGen);
+      showToast('Magic started! You can see progress in My Library. ✨', 'success');
+
+      // Clear form so user can start another one
+      const currentPhoto = uploadedPhoto;
+      const currentProcessed = processedPhoto;
+      reset();
+
+      // Start the actual generation process in the "background"
+      runGeneration(generationId, newGen.childName, newGen.theme, currentPhoto, currentProcessed?.original);
+
     } catch (err: any) {
-      console.error('🛑 [UI] Error in generation flow:', err);
-
-      // Update DB to failed
+      console.error('🛑 [UI] Error initiating generation:', err);
       if (generationId) {
+        updateActiveGeneration(generationId, { status: 'failed', error: err.message });
         await updateGenerationStatus(generationId, 'failed');
       }
+      showToast(err.message || 'The magic portal failed to open!', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-      setIsGenerating(false);
-      setGenerationProgress(0);
-      setCurrentGenerationId(null);
-      const message = err instanceof Error ? err.message : 'The magic encountered a little breeze! Please try generating your story again. 🪄';
-      showToast(message, 'error');
+  const runGeneration = async (id: string, name: string, theme: any, photo: File, photoBase64?: string) => {
+    try {
+      const result = await startGenerationViaWebhook(
+        name,
+        theme,
+        photo,
+        id,
+        (p) => {
+          updateActiveGeneration(id, { progress: p });
+        },
+        photoBase64
+      );
+
+      if (result) {
+        handleGenerationSuccess(result, id);
+      }
+    } catch (err: any) {
+      console.error(`🛑 [RUN] Generation failed for ${id}:`, err);
+      updateActiveGeneration(id, { status: 'failed', error: err.message });
+      await updateGenerationStatus(id, 'failed');
     }
   };
 
@@ -244,15 +196,8 @@ export const BookGenerator: React.FC = () => {
   };
 
   const handleReset = () => {
-    // If generation is in progress, confirm before force stopping
-    if (isGenerating) {
-      if (!window.confirm('Are you sure you want to force stop? The current generation cannot be resumed.')) {
-        return;
-      }
-    }
-
     reset();
-    setGeneratedBlob(null);
+    setGeneratedPDF(null);
     setCoverImage(null);
     setPdfDownloadUrl(null);
     setPdfDownloadBlob(null);
@@ -288,7 +233,7 @@ export const BookGenerator: React.FC = () => {
               placeholder="Enter the child's name..."
               className="w-full px-4 py-3 rounded-xl border-2 border-border bg-card text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
               maxLength={30}
-              disabled={isGenerating}
+              disabled={isSubmitting}
             />
             {childName && (
               <p className="text-sm text-muted-foreground">
@@ -311,26 +256,23 @@ export const BookGenerator: React.FC = () => {
           <div className="flex flex-col sm:flex-row gap-3">
             <button
               onClick={handleGenerate}
-              disabled={!isFormValid || isGenerating}
+              disabled={!isFormValid || isSubmitting}
               className={`
                 flex-1 btn-magic flex items-center justify-center gap-2
-                ${(!isFormValid || isGenerating) ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''}
+                ${(!isFormValid || isSubmitting) ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''}
               `}
             >
               <Sparkles className="w-5 h-5" />
-              {isGenerating ? 'Creating Magic...' : 'Generate Book'}
+              {isSubmitting ? 'Starting Magic...' : 'Generate Book'}
             </button>
 
             {(generatedPDF || childName || selectedTheme || uploadedPhoto) && (
               <button
                 onClick={handleReset}
-                className={`px-6 py-3 rounded-xl border-2 font-semibold transition-colors flex items-center justify-center gap-2 ${isGenerating
-                  ? 'border-destructive/30 text-destructive hover:bg-destructive/5 hover:border-destructive'
-                  : 'border-border text-muted-foreground hover:border-destructive hover:text-destructive'
-                  }`}
+                className={`px-6 py-3 rounded-xl border-2 font-semibold transition-colors flex items-center justify-center gap-2 border-border text-muted-foreground hover:border-destructive hover:text-destructive`}
               >
-                <RotateCcw className={`w-4 h-4 ${isGenerating ? 'animate-spin-once' : ''}`} />
-                {isGenerating ? 'Force Stop' : 'Start Over'}
+                <RotateCcw className="w-4 h-4" />
+                Start Over
               </button>
             )}
           </div>

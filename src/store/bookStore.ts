@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Theme, ProcessedPhoto, HistoryItem } from '../utils/types';
+import { Theme, ProcessedPhoto, HistoryItem, ActiveGeneration } from '../utils/types';
 
 interface BookStore {
   childName: string;
   selectedTheme: Theme | null;
   uploadedPhoto: File | null;
   processedPhoto: ProcessedPhoto | null;
-  isGenerating: boolean;
+  activeGenerations: Record<string, ActiveGeneration>;
   generatedPDF: string | null;
   coverImage: string | null;
   pdfDownloadUrl: string | null;
@@ -15,21 +15,19 @@ interface BookStore {
   coverDownloadUrl: string | null;
   currentGenerationId: string | null;
   photoName: string | null;
-  elapsedTime: number; // in seconds
-  generationProgress: number; // 0-100
   setChildName: (name: string) => void;
   setSelectedTheme: (theme: Theme | null) => void;
   setUploadedPhoto: (photo: File | null) => void;
   setProcessedPhoto: (photo: ProcessedPhoto | null) => void;
-  setIsGenerating: (status: boolean) => void;
+  addActiveGeneration: (gen: ActiveGeneration) => void;
+  updateActiveGeneration: (id: string, updates: Partial<ActiveGeneration>) => void;
+  removeActiveGeneration: (id: string) => void;
   setGeneratedPDF: (url: string | null) => void;
   setCoverImage: (url: string | null) => void;
   setPdfDownloadUrl: (url: string | null) => void;
   setPdfDownloadBlob: (blob: Blob | null) => void;
   setCoverDownloadUrl: (url: string | null) => void;
   setCurrentGenerationId: (id: string | null) => void;
-  setElapsedTime: (time: number | ((prev: number) => number)) => void;
-  setGenerationProgress: (progress: number) => void;
   loadBook: (data: HistoryItem) => void;
   reset: () => void;
 }
@@ -41,7 +39,7 @@ export const useBookStore = create<BookStore>()(
       selectedTheme: null,
       uploadedPhoto: null,
       processedPhoto: null,
-      isGenerating: false,
+      activeGenerations: {},
       generatedPDF: null,
       coverImage: null,
       pdfDownloadUrl: null,
@@ -49,23 +47,29 @@ export const useBookStore = create<BookStore>()(
       coverDownloadUrl: null,
       currentGenerationId: null,
       photoName: null,
-      elapsedTime: 0,
-      generationProgress: 0,
       setChildName: (name) => set({ childName: name }),
       setSelectedTheme: (theme) => set({ selectedTheme: theme }),
       setUploadedPhoto: (photo) => set({ uploadedPhoto: photo, photoName: photo ? photo.name : null }),
       setProcessedPhoto: (photo) => set({ processedPhoto: photo }),
-      setIsGenerating: (status) => set({ isGenerating: status }),
+      addActiveGeneration: (gen) => set((state) => ({
+        activeGenerations: { ...state.activeGenerations, [gen.id]: gen }
+      })),
+      updateActiveGeneration: (id, updates) => set((state) => ({
+        activeGenerations: {
+          ...state.activeGenerations,
+          [id]: state.activeGenerations[id] ? { ...state.activeGenerations[id], ...updates } : state.activeGenerations[id]
+        }
+      })),
+      removeActiveGeneration: (id) => set((state) => {
+        const { [id]: _, ...rest } = state.activeGenerations;
+        return { activeGenerations: rest };
+      }),
       setGeneratedPDF: (url) => set({ generatedPDF: url }),
       setCoverImage: (url) => set({ coverImage: url }),
       setPdfDownloadUrl: (url) => set({ pdfDownloadUrl: url }),
       setPdfDownloadBlob: (blob) => set({ pdfDownloadBlob: blob }),
       setCoverDownloadUrl: (url) => set({ coverDownloadUrl: url }),
       setCurrentGenerationId: (id) => set({ currentGenerationId: id }),
-      setElapsedTime: (time) => set((state) => ({
-        elapsedTime: typeof time === 'function' ? time(state.elapsedTime) : time
-      })),
-      setGenerationProgress: (progress) => set({ generationProgress: progress }),
       loadBook: (data) => set({
         childName: data.childName,
         selectedTheme: { id: '', name: data.themeName, emoji: data.themeEmoji, description: '', colors: { primary: '', secondary: '', accent: '', background: '' } },
@@ -73,17 +77,13 @@ export const useBookStore = create<BookStore>()(
         coverImage: data.thumbnailUrl,
         pdfDownloadUrl: data.pdfDownloadUrl || null,
         coverDownloadUrl: data.coverDownloadUrl || null,
-        isGenerating: false,
         currentGenerationId: null,
-        elapsedTime: 0,
-        generationProgress: 100
       }),
       reset: () => set({
         childName: '',
         selectedTheme: null,
         uploadedPhoto: null,
         processedPhoto: null,
-        isGenerating: false,
         generatedPDF: null,
         coverImage: null,
         pdfDownloadUrl: null,
@@ -91,8 +91,6 @@ export const useBookStore = create<BookStore>()(
         coverDownloadUrl: null,
         currentGenerationId: null,
         photoName: null,
-        elapsedTime: 0,
-        generationProgress: 0
       })
     }),
     {
@@ -100,7 +98,7 @@ export const useBookStore = create<BookStore>()(
       partialize: (state) => ({
         childName: state.childName,
         selectedTheme: state.selectedTheme,
-        isGenerating: state.isGenerating,
+        activeGenerations: state.activeGenerations,
         currentGenerationId: state.currentGenerationId,
         processedPhoto: state.processedPhoto,
         photoName: state.photoName,
@@ -108,6 +106,3 @@ export const useBookStore = create<BookStore>()(
     }
   )
 );
-
-
-

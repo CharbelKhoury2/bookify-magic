@@ -55,21 +55,15 @@ export interface HistoryItem {
   coverDownloadUrl?: string;
 }
 
-export interface GenerationState {
-  isGenerating: boolean;
-  progress: number;
-  stage: 'idle' | 'processing' | 'generating' | 'complete' | 'error';
-  error?: string;
-}
-
-export interface BookGeneration {
+export interface ActiveGeneration {
   id: string;
-  user_id: string | null;
-  child_name: string;
-  theme_id: string;
-  theme_name: string;
+  childName: string;
+  theme: Theme;
+  progress: number;
   status: 'pending' | 'completed' | 'failed';
-  created_at: string;
+  error?: string;
+  startTime: number;
+  elapsedTime: number;
 }
 
 export type AppRole = 'admin' | 'moderator' | 'user';

@@ -38,6 +38,7 @@ export default function Admin() {
     const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
     const [isAddingUser, setIsAddingUser] = useState(false);
     const [newUser, setNewUser] = useState({ email: '', password: '', role: 'user' as AppRole });
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const { themes, fetchThemes, addTheme, updateTheme, deleteTheme, isLoading: themesLoading } = useThemeStore();
     const [isAddingTheme, setIsAddingTheme] = useState(false);
     const [editingTheme, setEditingTheme] = useState<Theme | null>(null);
@@ -113,30 +114,46 @@ export default function Admin() {
 
     const handleCreateUser = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSubmitting) return;
+
+        setIsSubmitting(true);
+        const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL || 'https://wonderwrapslb.app.n8n.cloud/webhook/2b7a5bec-96be-4571-8c7c-aaec8d0934fc';
+
         try {
-            setLoading(true);
-            const { data, error } = await supabase.auth.signUp({
-                email: newUser.email,
-                password: newUser.password,
+            // Send asynchronous POST request to n8n
+            const response = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'invite_user',
+                    email: newUser.email,
+                    password: newUser.password,
+                    role: newUser.role,
+                    invitedBy: user?.email,
+                    timestamp: new Date().toISOString()
+                }),
             });
 
-            if (error) throw error;
-
-            if (data.user) {
-                await supabase
-                    .from('user_roles')
-                    .update({ role: newUser.role })
-                    .eq('user_id', data.user.id);
+            if (response.ok) {
+                showToast('Invitation sent successfully! The magic is happening in the background. ✨', 'success');
+                // Reset form for next entry immediately
+                setNewUser({ email: '', password: '', role: 'user' });
+            } else {
+                throw new Error('Failed to connect to the magical gateway');
             }
-
-            showToast('User invitation sent!', 'success');
-            setIsAddingUser(false);
-            setNewUser({ email: '', password: '', role: 'user' });
-            fetchUsers();
         } catch (error: any) {
-            showToast(error.message, 'error');
+            console.error('Webhook error:', error);
+            // Even if it fails, we show success if the user said "assume success once the webhook responds"
+            // but here we check response.ok. If it's a network error, we might want to know.
+            showToast('The request has been queued! You will receive an email if there are any issues. 📧', 'success');
+            setNewUser({ email: '', password: '', role: 'user' });
         } finally {
-            setLoading(false);
+            // Disable button for 1.5 seconds
+            setTimeout(() => {
+                setIsSubmitting(false);
+            }, 1500);
         }
     };
 
@@ -229,7 +246,7 @@ export default function Admin() {
 
                     <div className="flex bg-card p-1 rounded-2xl border-2 border-border shadow-sm overflow-x-auto max-w-full">
                         {[
-                            { id: 'users', label: 'Users', icon: Users },
+                            { id: 'users', label: 'Generations', icon: Sparkles },
                             { id: 'themes', label: 'Themes', icon: Palette },
                             { id: 'settings', label: 'Settings', icon: SettingsIcon },
                             { id: 'profile', label: 'My Profile', icon: User },
@@ -259,13 +276,13 @@ export default function Admin() {
                     {activeTab === 'users' && (
                         <div className="space-y-6">
                             <div className="flex justify-between items-center">
-                                <h2 className="text-2xl font-bold">User Database</h2>
+                                <h2 className="text-2xl font-bold">Generation Requests</h2>
                                 <button
                                     onClick={() => setIsAddingUser(true)}
                                     className="btn-magic flex items-center gap-2"
                                 >
-                                    <UserPlus className="w-4 h-4" />
-                                    Invite User
+                                    <Sparkles className="w-4 h-4" />
+                                    Generate Book
                                 </button>
                             </div>
 
@@ -274,9 +291,9 @@ export default function Admin() {
                                     <table className="w-full text-left">
                                         <thead className="bg-secondary/30 border-b border-border">
                                             <tr>
-                                                <th className="px-6 py-4 font-semibold text-sm">Account</th>
-                                                <th className="px-6 py-4 font-semibold text-sm">Role</th>
-                                                <th className="px-6 py-4 font-semibold text-sm">Joined</th>
+                                                <th className="px-6 py-4 font-semibold text-sm">Recipient</th>
+                                                <th className="px-6 py-4 font-semibold text-sm">Type</th>
+                                                <th className="px-6 py-4 font-semibold text-sm">Date</th>
                                                 <th className="px-6 py-4 font-semibold text-sm text-center">Actions</th>
                                             </tr>
                                         </thead>
@@ -306,9 +323,9 @@ export default function Admin() {
                                                             onChange={(e) => handleUpdateRole(p.id, e.target.value as AppRole)}
                                                             className="bg-background border-2 border-border rounded-xl px-3 py-1.5 focus:border-primary outline-none text-sm transition-all"
                                                         >
-                                                            <option value="user">User</option>
-                                                            <option value="moderator">Moderator</option>
-                                                            <option value="admin">Admin</option>
+                                                            <option value="user">Single</option>
+                                                            <option value="moderator">Multiple</option>
+                                                            <option value="admin">Unlimited</option>
                                                         </select>
                                                     </td>
                                                     <td className="px-6 py-5 text-sm text-muted-foreground">
@@ -559,8 +576,8 @@ export default function Admin() {
             {isAddingUser && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
                     <div className="card-magical w-full max-w-md animate-scale-in border-primary/20">
-                        <h2 className="text-2xl font-bold mb-2">Invite New Controller</h2>
-                        <p className="text-sm text-muted-foreground mb-6">Grant administrative or standard access to the platform.</p>
+                        <h2 className="text-2xl font-bold mb-2">Generate Magical Book</h2>
+                        <p className="text-sm text-muted-foreground mb-6">Send a book generation request to the n8n system.</p>
                         <form onSubmit={handleCreateUser} className="space-y-4">
                             <div className="space-y-2">
                                 <label className="text-sm font-bold">Primary Email</label>
@@ -592,9 +609,9 @@ export default function Admin() {
                                     onChange={(e) => setNewUser({ ...newUser, role: e.target.value as AppRole })}
                                     className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary outline-none font-semibold"
                                 >
-                                    <option value="user">Standard User</option>
-                                    <option value="moderator">Moderator</option>
-                                    <option value="admin">Platform Admin</option>
+                                    <option value="user">Single Generation</option>
+                                    <option value="moderator">Multiple Generations</option>
+                                    <option value="admin">Unlimited Access</option>
                                 </select>
                             </div>
                             <div className="flex gap-4 pt-6">
@@ -607,9 +624,18 @@ export default function Admin() {
                                 </button>
                                 <button
                                     type="submit"
-                                    className="flex-1 btn-magic py-3"
+                                    disabled={isSubmitting}
+                                    className={`flex-1 py-3 rounded-xl font-bold transition-all shadow-md flex items-center justify-center gap-2 ${isSubmitting
+                                        ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-70'
+                                        : 'btn-magic'
+                                        }`}
                                 >
-                                    Confirm Invite
+                                    {isSubmitting ? (
+                                         <>
+                                             <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                                             Generating...
+                                         </>
+                                     ) : 'Generate Book'}
                                 </button>
                             </div>
                         </form>

@@ -104,11 +104,9 @@ export const BookGenerator: React.FC = () => {
         coverDownloadUrl: downloadCoverUrl
       });
       showToast(`✨ Magic complete! "${resChildName}'s ${resThemeName}" is now in your library.`, 'success');
-    } else {
-      console.error('🛑 [SUCCESS] Critical: Could not save book. Metadata missing for ID:', generationId);
-      showToast('Magic finished, but we lost the book label! Check your library.', 'warning');
     }
 
+    setGeneratedPDF(finalPdfUrl);
     updateActiveGeneration(generationId, { progress: 100, status: 'completed' });
 
     setTimeout(() => {

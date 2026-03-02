@@ -187,9 +187,13 @@ export const HistoryPanel: React.FC = () => {
                     </h4>
                     <div className="flex justify-between items-center mt-1">
                       <p className="text-[10px] text-primary/60 font-medium uppercase tracking-tighter">
-                        {gen.status === 'failed' ? 'Magic Failed' : 'Creating Magic...'}
+                        {gen.status === 'failed' 
+                          ? 'Magic Failed' 
+                          : gen.status === 'completed' 
+                            ? 'Magic Complete! ✨' 
+                            : 'Creating Magic...'}
                       </p>
-                      {gen.status !== 'failed' && (
+                      {gen.status === 'pending' && (
                         <div className="flex items-center gap-1">
                           <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
                           <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
@@ -203,7 +207,10 @@ export const HistoryPanel: React.FC = () => {
                   <p className="text-[10px] text-destructive font-medium px-1">{gen.error || 'Unknown error'}</p>
                 ) : (
                   <div className="w-full h-1 bg-primary/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-primary/40 animate-pulse-slow" style={{ width: '100%' }} />
+                    <div 
+                      className={`h-full transition-all duration-500 ${gen.status === 'completed' ? 'bg-success' : 'bg-primary/40 animate-pulse-slow'}`} 
+                      style={{ width: '100%' }} 
+                    />
                   </div>
                 )}
               </div>

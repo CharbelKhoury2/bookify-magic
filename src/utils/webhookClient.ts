@@ -293,17 +293,20 @@ export async function getPdfUrlForGeneration(generationId: string): Promise<{
  */
 export async function moveBookToTrash(bookId: string): Promise<boolean> {
   try {
-    const { error } = await supabase
+    console.log(`🗑️ [TRASH] Moving book ${bookId} to trash...`);
+    
+    const { error, data } = await supabase
       .from('book_generations')
       .update({ status: 'trashed' })
-      .eq('id', bookId);
+      .eq('id', bookId)
+      .select();
 
     if (error) {
       console.error('❌ [TRASH] Failed to move book to trash:', error);
       return false;
     }
 
-    console.log(`✅ [TRASH] Book ${bookId} moved to trash`);
+    console.log(`✅ [TRASH] Book ${bookId} moved to trash successfully:`, data);
     return true;
 
   } catch (error) {
@@ -317,7 +320,10 @@ export async function moveBookToTrash(bookId: string): Promise<boolean> {
  */
 export async function fetchTrashedBooks(): Promise<HistoryItem[]> {
   try {
+    console.log('🗑️ [TRASH] Fetching trashed books...');
+    
     const { data: { user } } = await supabase.auth.getUser();
+    console.log('🗑️ [TRASH] User ID:', user?.id);
 
     const { data, error } = await supabase
       .from('book_generations')
@@ -325,6 +331,9 @@ export async function fetchTrashedBooks(): Promise<HistoryItem[]> {
       .eq('status', 'trashed')
       .eq('user_id', user?.id || null)
       .order('created_at', { ascending: false });
+
+    console.log('🗑️ [TRASH] Raw data from database:', data);
+    console.log('🗑️ [TRASH] Database error:', error);
 
     if (error) {
       console.error('❌ [TRASH] Failed to fetch trashed books:', error);
@@ -336,7 +345,7 @@ export async function fetchTrashedBooks(): Promise<HistoryItem[]> {
       return [];
     }
 
-    console.log(`🗑️ [TRASH] Found ${data.length} trashed books`);
+    console.log(`🗑️ [TRASH] Found ${data.length} trashed books in database`);
 
     // Transform database records to HistoryItem format
     const historyItems: HistoryItem[] = data

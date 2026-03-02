@@ -3,16 +3,34 @@ import { BookGenerator } from './components/BookGenerator';
 import { HistoryPanel } from './components/HistoryPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useAuth } from './hooks/useAuth';
-import { BookOpen, User, LogOut, ShieldCheck } from 'lucide-react';
+import { BookOpen, User, LogOut, ShieldCheck, RotateCcw } from 'lucide-react';
 import Auth from './pages/Auth';
 import Admin from './pages/Admin';
 import { ThemeProvider } from './components/ThemeProvider';
 import { DarkModeToggle } from './components/DarkModeToggle';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
+import { useBookStore } from './store/bookStore';
+import { useHistoryStore } from './store/historyStore';
+import { useToast } from './hooks/use-toast';
 
 function HomePage() {
   const { user, loading, signOut, isAdmin } = useAuth();
+  const { resetAll } = useBookStore();
+  const { clearHistory, clearDeletedHistory } = useHistoryStore();
+  const { toast } = useToast();
+
+  const handleMasterReset = () => {
+    if (window.confirm('🚨 MASTER RESET: Are you sure you want to clear EVERYTHING? (Form data, active generations, and library history will be lost)')) {
+      resetAll();
+      clearHistory();
+      clearDeletedHistory();
+      toast({
+        title: "Magic Reset Complete",
+        description: "All application data and history have been cleared.",
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen gradient-dreamy py-8 px-4 sm:py-12">
@@ -23,6 +41,14 @@ function HomePage() {
             <div className="flex items-center gap-3">
               <DarkModeToggle />
               <div className="flex items-center gap-1 border-2 border-border/50 rounded-2xl p-1 bg-card/50 backdrop-blur-sm shadow-sm">
+                <button
+                  onClick={handleMasterReset}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-transparent hover:border-destructive/20 text-muted-foreground hover:text-destructive transition-all group"
+                  title="Master Reset Everything"
+                >
+                  <RotateCcw className="w-4 h-4 transition-transform group-hover:rotate-[-180deg] duration-500" />
+                  <span className="hidden lg:inline font-bold text-sm">Reset Everything</span>
+                </button>
                 {isAdmin && (
                   <Link
                     to="/admin"

@@ -289,6 +289,150 @@ export async function getPdfUrlForGeneration(generationId: string): Promise<{
 }
 
 /**
+ * Moves a book to trash (updates status to 'trashed')
+ */
+export async function moveBookToTrash(bookId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('book_generations')
+      .update({ status: 'trashed' })
+      .eq('id', bookId);
+
+    if (error) {
+      console.error('❌ [TRASH] Failed to move book to trash:', error);
+      return false;
+    }
+
+    console.log(`✅ [TRASH] Book ${bookId} moved to trash`);
+    return true;
+
+  } catch (error) {
+    console.error('❌ [TRASH] Error moving book to trash:', error);
+    return false;
+  }
+}
+
+/**
+ * Fetches trashed books from the Supabase database
+ */
+export async function fetchTrashedBooks(): Promise<HistoryItem[]> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { data, error } = await supabase
+      .from('book_generations')
+      .select('*')
+      .eq('status', 'trashed')
+      .eq('user_id', user?.id || null)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('❌ [TRASH] Failed to fetch trashed books:', error);
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      console.log('🗑️ [TRASH] No trashed books found');
+      return [];
+    }
+
+    console.log(`🗑️ [TRASH] Found ${data.length} trashed books`);
+
+    // Transform database records to HistoryItem format
+    const historyItems: HistoryItem[] = data
+      .map((book: any) => {
+        // Try to extract PDF URLs from various possible fields
+        const pdfUrl = book.pdf_url || book.generated_pdf_url || book.pdfUrl || book.pdf || '';
+        const thumbnailUrl = book.thumbnail_url || book.cover_image_url || book.cover_url || book.coverImageUrl || book.thumbnail || '';
+        
+        // Only include books that actually have PDF URLs
+        if (!pdfUrl) {
+          console.warn(`⚠️ [TRASH] Skipping book ${book.id} - no PDF URL found`);
+          return null;
+        }
+
+        // Google Drive Security Fix: Convert /view to /preview for embeddable preview
+        let finalPdfUrl = pdfUrl;
+        if (finalPdfUrl.includes('drive.google.com') && finalPdfUrl.includes('/view')) {
+          finalPdfUrl = finalPdfUrl.replace('/view', '/preview');
+        }
+
+        let finalThumbnailUrl = thumbnailUrl;
+        if (finalThumbnailUrl.includes('drive.google.com') && finalThumbnailUrl.includes('/view')) {
+          finalThumbnailUrl = finalThumbnailUrl.replace('/view', '/preview');
+        }
+        
+        return {
+          id: book.id,
+          childName: book.child_name,
+          themeName: book.theme_name,
+          themeEmoji: book.theme_emoji || '📚',
+          timestamp: new Date(book.created_at).getTime(),
+          pdfUrl: finalPdfUrl,
+          thumbnailUrl: finalThumbnailUrl,
+          pdfDownloadUrl: pdfUrl,
+          coverDownloadUrl: thumbnailUrl
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+
+    return historyItems;
+
+  } catch (error) {
+    console.error('❌ [TRASH] Error fetching trashed books:', error);
+    return [];
+  }
+}
+
+/**
+ * Restores a book from trash (updates status back to 'completed')
+ */
+export async function restoreBookFromTrash(bookId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('book_generations')
+      .update({ status: 'completed' })
+      .eq('id', bookId);
+
+    if (error) {
+      console.error('❌ [RESTORE] Failed to restore book from trash:', error);
+      return false;
+    }
+
+    console.log(`✅ [RESTORE] Book ${bookId} restored from trash`);
+    return true;
+
+  } catch (error) {
+    console.error('❌ [RESTORE] Error restoring book from trash:', error);
+    return false;
+  }
+}
+
+/**
+ * Deletes a book from the database
+ */
+export async function deleteBookFromDatabase(bookId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('book_generations')
+      .delete()
+      .eq('id', bookId);
+
+    if (error) {
+      console.error('❌ [DELETE] Failed to delete book from database:', error);
+      return false;
+    }
+
+    console.log(`✅ [DELETE] Book ${bookId} deleted from database`);
+    return true;
+
+  } catch (error) {
+    console.error('❌ [DELETE] Error deleting book from database:', error);
+    return false;
+  }
+}
+
+/**
  * Fetches completed books from the Supabase database
  */
 export async function fetchCompletedBooks(): Promise<HistoryItem[]> {

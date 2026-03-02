@@ -222,43 +222,54 @@ export const HistoryPanel: React.FC = () => {
           ) : (
             trashedBooks.length > 0 && (
               <button
-                onClick={() => confirm({
-                  title: "Empty Trash?",
-                  description: "This will permanently delete all books in your trash. This action cannot be undone.",
-                  actionLabel: "Empty Trash",
-                  isDestructive: true,
-                  onConfirm: async () => {
-                    // Permanently delete all trashed books
-                    let deletedCount = 0;
-                    let failedCount = 0;
-                    
-                    for (const book of trashedBooks) {
-                      const success = await deleteBookFromDatabase(book.id);
-                      if (success) {
-                        deletedCount++;
-                      } else {
-                        failedCount++;
+                onClick={() => {
+                  console.log('🗑️ [EMPTY TRASH] Button clicked, trashedBooks.length:', trashedBooks.length);
+                  confirm({
+                    title: "Empty Trash?",
+                    description: "This will permanently delete all books in your trash. This action cannot be undone.",
+                    actionLabel: "Empty Trash",
+                    isDestructive: true,
+                    onConfirm: async () => {
+                      console.log('🗑️ [EMPTY TRASH] Starting empty trash process...');
+                      console.log('🗑️ [EMPTY TRASH] Books to delete:', trashedBooks.length);
+                      
+                      // Permanently delete all trashed books
+                      let deletedCount = 0;
+                      let failedCount = 0;
+                      
+                      for (const book of trashedBooks) {
+                        console.log(`🗑️ [EMPTY TRASH] Deleting book: ${book.id} - ${book.childName}'s ${book.themeName}`);
+                        const success = await deleteBookFromDatabase(book.id);
+                        if (success) {
+                          deletedCount++;
+                          console.log(`✅ [EMPTY TRASH] Successfully deleted: ${book.id}`);
+                        } else {
+                          failedCount++;
+                          console.log(`❌ [EMPTY TRASH] Failed to delete: ${book.id}`);
+                        }
                       }
-                    }
-                    
-                    // Clear trash state
-                    setTrashedBooks([]);
-                    
-                    if (failedCount > 0) {
-                      toast({
-                        title: "Partial Success",
-                        description: `${deletedCount} books permanently deleted, ${failedCount} failed.`,
-                        variant: "destructive",
-                      });
-                    } else {
-                      toast({
-                        title: "Trash Emptied",
-                        description: `All ${deletedCount} books have been permanently deleted.`,
-                        variant: "destructive",
-                      });
-                    }
-                  },
-                })}
+                      
+                      console.log(`🗑️ [EMPTY TRASH] Results: ${deletedCount} deleted, ${failedCount} failed`);
+                      
+                      // Clear trash state
+                      setTrashedBooks([]);
+                      
+                      if (failedCount > 0) {
+                        toast({
+                          title: "Partial Success",
+                          description: `${deletedCount} books permanently deleted, ${failedCount} failed.`,
+                          variant: "destructive",
+                        });
+                      } else {
+                        toast({
+                          title: "Trash Emptied",
+                          description: `All ${deletedCount} books have been permanently deleted.`,
+                          variant: "destructive",
+                        });
+                      }
+                    },
+                  });
+                }}
                 className="text-xs text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded hover:bg-destructive/5"
               >
                 Empty trash

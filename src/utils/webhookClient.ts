@@ -178,13 +178,15 @@ async function monitorLibraryForResultById(
                            (book as { thumbnail_url?: string; cover_image_url?: string; cover_url?: string; featured_image?: string }).featured_image || '';
 
           // Google Drive Security Fix: Convert /view to /preview for embeddable preview
-          if (pdfUrl.includes('drive.google.com') && pdfUrl.includes('/view')) {
-            pdfUrl = pdfUrl.replace('/view', '/preview');
+          let finalPdfUrl = pdfUrl;
+          if (finalPdfUrl.includes('drive.google.com') && finalPdfUrl.includes('/view')) {
+            finalPdfUrl = finalPdfUrl.replace('/view', '/preview');
           }
 
           // If we have a cover URL, ensure it's a good one
-          if (coverUrl.includes('drive.google.com') && coverUrl.includes('/view')) {
-            coverUrl = coverUrl.replace('/view', '/preview');
+          let finalCoverUrl = coverUrl;
+          if (finalCoverUrl.includes('drive.google.com') && finalCoverUrl.includes('/view')) {
+            finalCoverUrl = finalCoverUrl.replace('/view', '/preview');
           }
 
           onProgress?.(100);
@@ -200,7 +202,7 @@ async function monitorLibraryForResultById(
         }
 
         if (book.status === 'failed') {
-          throw new Error(book.error_message || 'The magic encountered a little breeze! Please try generating your story again. 🪄');
+          throw new Error((book as any).error_message || 'The magic encountered a little breeze! Please try generating your story again. 🪄');
         }
       }
     } catch (e: unknown) {
@@ -213,6 +215,66 @@ async function monitorLibraryForResultById(
   }
 
   throw new Error('The magical ink is taking a bit longer than usual to dry. 🎨 Your story is still being crafted! Please check "My Library" in a few minutes.');
+}
+
+/**
+ * Syncs completed generations from database with frontend state
+ */
+export async function syncCompletedGenerations(
+  activeGenerations: Record<string, any>,
+  onUpdate: (generationId: string, status: 'completed' | 'failed', error?: string) => void
+) {
+  console.log('🔄 [SYNC] Checking for completed generations in database...');
+  
+  try {
+    // Get all generations that are currently active in the frontend
+    const activeIds = Object.keys(activeGenerations);
+    
+    if (activeIds.length === 0) {
+      console.log('🔄 [SYNC] No active generations to check');
+      return;
+    }
+
+    // Query database for these specific generations
+    const { data: generations, error } = await supabase
+      .from('book_generations')
+      .select('*')
+      .in('id', activeIds);
+
+    if (error) {
+      console.error('❌ [SYNC] Failed to fetch generations:', error);
+      return;
+    }
+
+    if (!generations || generations.length === 0) {
+      console.log('🔄 [SYNC] No generations found in database');
+      return;
+    }
+
+    console.log(`🔄 [SYNC] Found ${generations.length} generations in database`);
+
+    // Check each generation's status
+    generations.forEach((gen) => {
+      const frontendGen = activeGenerations[gen.id];
+      
+      if (!frontendGen) {
+        console.log(`🔄 [SYNC] Generation ${gen.id} not found in frontend state`);
+        return;
+      }
+
+      // If database status is different from frontend status
+      if (gen.status === 'completed' && frontendGen.status !== 'completed') {
+        console.log(`✅ [SYNC] Generation ${gen.id} completed in database, updating frontend`);
+        onUpdate(gen.id, 'completed');
+      } else if (gen.status === 'failed' && frontendGen.status !== 'failed') {
+        console.log(`❌ [SYNC] Generation ${gen.id} failed in database, updating frontend`);
+        onUpdate(gen.id, 'failed', (gen as any).error_message || 'Generation failed');
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ [SYNC] Error syncing completed generations:', error);
+  }
 }
 
 /**
@@ -418,13 +480,13 @@ async function monitorLibraryForResult(
         const book = data[0];
 
         // If n8n has updated the status to completed
-        if (book.status === 'completed' || book.pdf_url || book.generated_pdf_url) {
+        if (book.status === 'completed' || (book as any).pdf_url || (book as any).generated_pdf_url) {
           console.log('✅ [WATCHER] Magic complete! Opening book...');
           onProgress?.(100);
           return {
-            pdfUrl: book.pdf_url || book.generated_pdf_url,
-            coverImageUrl: book.thumbnail_url || book.cover_image_url,
-            pdfDownloadUrl: book.pdf_url || book.generated_pdf_url,
+            pdfUrl: (book as any).pdf_url || (book as any).generated_pdf_url,
+            coverImageUrl: (book as any).thumbnail_url || (book as any).cover_image_url,
+            pdfDownloadUrl: (book as any).pdf_url || (book as any).generated_pdf_url,
           };
         }
 
@@ -485,7 +547,7 @@ async function pollDatabaseStatus(
       }
 
       if (data.status === 'failed') {
-        throw new Error(data.error_message || 'The AI magic encountered an issue.');
+        throw new Error((data as any).error_message || 'The AI magic encountered an issue.');
       }
 
     } catch (e) {

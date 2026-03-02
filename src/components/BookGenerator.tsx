@@ -9,9 +9,10 @@ import { useBookStore } from '../store/bookStore';
 import { useHistoryStore } from '../store/historyStore';
 import { validateBookData } from '../utils/validators';
 import { downloadPDF, sanitizeFileName } from '../utils/pdfGenerator';
-import { startGenerationViaWebhook, logGenerationStart, updateGenerationStatus, resumeGenerationMonitoring } from '../utils/webhookClient';
+import { startGenerationViaWebhook, logGenerationStart, updateGenerationStatus, resumeGenerationMonitoring, syncCompletedGenerations } from '../utils/webhookClient';
 import { safeOpen } from '../utils/security';
 import { forceDownload } from '../utils/imageUtils';
+import { Theme } from '../utils/types';
 
 export const BookGenerator: React.FC = () => {
   const {
@@ -155,6 +156,50 @@ export const BookGenerator: React.FC = () => {
       }
     });
   }, [activeGenerations, resumeMonitoring]);
+
+  // Sync completed generations from database
+  React.useEffect(() => {
+    const syncStatus = async (generationId: string, status: 'completed' | 'failed', error?: string) => {
+      const gen = activeGenerations[generationId];
+      if (!gen) return;
+
+      if (status === 'completed') {
+        // Try to get the completed data from database
+        try {
+          const result = await resumeGenerationMonitoring(generationId);
+          if (result) {
+            handleGenerationSuccess(result, generationId);
+          } else {
+            // Fallback: just update status
+            updateActiveGeneration(generationId, { status: 'completed', progress: 100 });
+            setTimeout(() => {
+              removeActiveGeneration(generationId);
+              monitoringRef.current.delete(generationId);
+            }, 5000);
+          }
+        } catch (err) {
+          console.error('Failed to handle completed generation:', err);
+        }
+      } else if (status === 'failed') {
+        updateActiveGeneration(generationId, { status: 'failed', error });
+        monitoringRef.current.delete(generationId);
+      }
+    };
+
+    // Initial sync
+    if (Object.keys(activeGenerations).length > 0) {
+      syncCompletedGenerations(activeGenerations, syncStatus);
+    }
+
+    // Set up periodic polling every 30 seconds
+    const interval = setInterval(() => {
+      if (Object.keys(activeGenerations).length > 0) {
+        syncCompletedGenerations(activeGenerations, syncStatus);
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [activeGenerations, handleGenerationSuccess, removeActiveGeneration, resumeGenerationMonitoring, syncCompletedGenerations, updateActiveGeneration]);
 
   const handleGenerate = async () => {
     const validation = validateBookData(childName, selectedTheme?.id || null, uploadedPhoto);

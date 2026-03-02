@@ -316,6 +316,43 @@ export async function moveBookToTrash(bookId: string): Promise<boolean> {
 }
 
 /**
+ * Debug function to check all book statuses for the current user
+ */
+export async function debugAllBookStatuses(): Promise<void> {
+  try {
+    console.log('🔍 [DEBUG] Checking all book statuses...');
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    console.log('🔍 [DEBUG] User ID:', user?.id);
+
+    const { data, error } = await supabase
+      .from('book_generations')
+      .select('id, child_name, theme_name, status, created_at')
+      .eq('user_id', user?.id || null)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('❌ [DEBUG] Failed to fetch all books:', error);
+      return;
+    }
+
+    console.log('🔍 [DEBUG] All books for user:', data);
+    
+    if (data && data.length > 0) {
+      const statusCounts = data.reduce((acc: any, book: any) => {
+        acc[book.status] = (acc[book.status] || 0) + 1;
+        return acc;
+      }, {});
+      
+      console.log('🔍 [DEBUG] Status counts:', statusCounts);
+    }
+
+  } catch (error) {
+    console.error('❌ [DEBUG] Error checking book statuses:', error);
+  }
+}
+
+/**
  * Fetches trashed books from the Supabase database
  */
 export async function fetchTrashedBooks(): Promise<HistoryItem[]> {
@@ -332,8 +369,8 @@ export async function fetchTrashedBooks(): Promise<HistoryItem[]> {
       .eq('user_id', user?.id || null)
       .order('created_at', { ascending: false });
 
-    console.log('🗑️ [TRASH] Raw data from database:', data);
-    console.log('🗑️ [TRASH] Database error:', error);
+    console.log('🗑️ [TRASH] Supabase query result - Data:', data);
+    console.log('🗑️ [TRASH] Supabase query result - Error:', error);
 
     if (error) {
       console.error('❌ [TRASH] Failed to fetch trashed books:', error);

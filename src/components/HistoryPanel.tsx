@@ -5,7 +5,7 @@ import { useBookStore } from '../store/bookStore';
 import { formatDistanceToNow } from 'date-fns';
 import { HistoryItem } from '../utils/types';
 import { BookViewerModal } from './BookViewerModal';
-import { fetchCompletedBooks, getPdfUrlForGeneration, deleteBookFromDatabase, moveBookToTrash, fetchTrashedBooks, restoreBookFromTrash } from '../utils/webhookClient';
+import { fetchCompletedBooks, getPdfUrlForGeneration, deleteBookFromDatabase, moveBookToTrash, fetchTrashedBooks, restoreBookFromTrash, debugAllBookStatuses } from '../utils/webhookClient';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,6 +58,9 @@ export const HistoryPanel: React.FC = () => {
     const loadData = async () => {
       setIsLoading(true);
       try {
+        // Debug: Check all book statuses
+        await debugAllBookStatuses();
+        
         const [completed, trashed] = await Promise.all([
           fetchCompletedBooks(),
           fetchTrashedBooks()

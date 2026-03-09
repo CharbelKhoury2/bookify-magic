@@ -83,10 +83,16 @@ export const HistoryPanel: React.FC = () => {
   };
 
   const handleCardClick = async (item: HistoryItem) => {
+    console.log('🔍 [DEBUG] Original item data:', item);
+    console.log('🔍 [DEBUG] Original item.childName:', item.childName);
+    
     // Fetch the latest PDF data based on the generation ID
     const freshData = await getPdfUrlForGeneration(item.id);
     
     if (freshData) {
+      console.log('🔍 [DEBUG] Fresh data:', freshData);
+      console.log('🔍 [DEBUG] Fresh data.childName:', freshData.childName);
+      
       // Use the fresh data with updated URLs
       const updatedItem: HistoryItem = {
         ...item,
@@ -96,11 +102,15 @@ export const HistoryPanel: React.FC = () => {
         coverDownloadUrl: freshData.coverDownloadUrl
       };
       
+      console.log('🔍 [DEBUG] Updated item:', updatedItem);
+      console.log('🔍 [DEBUG] Updated item.childName:', updatedItem.childName);
+      
       setViewingBook(updatedItem);
       loadBook(updatedItem);
       console.log('📖 Viewing book from library with fresh data:', item.childName);
     } else {
       // Fallback to original item if fresh data fetch fails
+      console.log('🔍 [DEBUG] Using fallback item:', item);
       setViewingBook(item);
       loadBook(item);
       console.log('📖 Viewing book from library (fallback):', item.childName);

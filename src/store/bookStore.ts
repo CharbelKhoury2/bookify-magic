@@ -71,15 +71,24 @@ export const useBookStore = create<BookStore>()(
       setPdfDownloadBlob: (blob) => set({ pdfDownloadBlob: blob }),
       setCoverDownloadUrl: (url) => set({ coverDownloadUrl: url }),
       setCurrentGenerationId: (id) => set({ currentGenerationId: id }),
-      loadBook: (data) => set({
-        childName: data.childName,
-        selectedTheme: { id: '', name: data.themeName, emoji: data.themeEmoji, description: '', colors: { primary: '', secondary: '', accent: '', background: '' } },
-        generatedPDF: data.pdfUrl,
-        coverImage: data.thumbnailUrl,
-        pdfDownloadUrl: data.pdfDownloadUrl || null,
-        coverDownloadUrl: data.coverDownloadUrl || null,
-        currentGenerationId: null,
-      }),
+      loadBook: (data) => {
+        console.log('🔍 [STORE] loadBook called with data:', data);
+        console.log('🔍 [STORE] data.childName:', data.childName);
+        console.log('🔍 [STORE] typeof data.childName:', typeof data.childName);
+        
+        const result = set({
+          childName: data.childName,
+          selectedTheme: { id: '', name: data.themeName, emoji: data.themeEmoji, description: '', colors: { primary: '', secondary: '', accent: '', background: '' } },
+          generatedPDF: data.pdfUrl,
+          coverImage: data.thumbnailUrl,
+          pdfDownloadUrl: data.pdfDownloadUrl || null,
+          coverDownloadUrl: data.coverDownloadUrl || null,
+          currentGenerationId: null,
+        });
+        
+        console.log('🔍 [STORE] After set, childName is now:', data.childName);
+        return result;
+      },
       reset: () => set({
         childName: '',
         selectedTheme: null,

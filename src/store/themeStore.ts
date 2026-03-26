@@ -155,12 +155,20 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
                 if (updates.colors.background) dbUpdates.color_background = updates.colors.background;
             }
 
-            const { error } = await supabase
+            console.log('📝 [ThemeStore] Updating theme in DB:', id, dbUpdates);
+            
+            const { error, data } = await supabase
                 .from('themes')
                 .update(dbUpdates)
-                .eq('id', id);
+                .eq('id', id)
+                .select();
 
-            if (error) throw error;
+            if (error) {
+                console.error('❌ [ThemeStore] Supabase update failed:', error);
+                throw error;
+            }
+            
+            console.log('✅ [ThemeStore] Update response:', data);
             await get().fetchThemes();
         } catch (err: unknown) {
             const error = err as Error;

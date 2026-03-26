@@ -124,7 +124,7 @@ export const useBookStore = create<BookStore>()(
         selectedTheme: state.selectedTheme,
         activeGenerations: state.activeGenerations,
         currentGenerationId: state.currentGenerationId,
-        processedPhoto: state.processedPhoto,
+        // Removed processedPhoto as it stores large base64 strings that exceed storage quota
         photoName: state.photoName,
       }),
     }

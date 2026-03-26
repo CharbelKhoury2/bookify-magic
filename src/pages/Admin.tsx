@@ -21,7 +21,11 @@ import {
     Palette,
     Plus,
     Edit2,
-    Check
+    Check,
+    Download,
+    RotateCcw,
+    Heart,
+    X
 } from 'lucide-react';
 import { UserProfile, AppRole, Theme } from '@/utils/types';
 import { Toast, ToastType } from '@/components/Toast';
@@ -31,7 +35,7 @@ import { useThemeStore } from '@/store/themeStore';
 import { useBookStore } from '@/store/bookStore';
 import { useHistoryStore } from '@/store/historyStore';
 
-type AdminTab = 'users' | 'themes' | 'settings' | 'profile';
+type AdminTab = 'users' | 'themes' | 'profile';
 
 export default function Admin() {
     const { user, role, isAdmin, loading: authLoading, signOut } = useAuth();
@@ -76,15 +80,17 @@ export default function Admin() {
                 .from('profiles')
                 .select('*');
 
-            const combined: UserProfile[] = (profilesData || []).map((p: { id: string; email: string; created_at: string }) => {
-                const roleObj = rolesData.find(r => r.user_id === p.id);
-                return {
-                    id: p.id,
-                    email: p.email,
-                    role: (roleObj?.role as AppRole) || 'user',
-                    created_at: p.created_at
-                };
-            });
+            const combined: UserProfile[] = (profilesData || [])
+                .filter((p: { email: string }) => p.email !== 'ckhoury100@gmail.com')
+                .map((p: { id: string; email: string; created_at: string }) => {
+                    const roleObj = rolesData.find(r => r.user_id === p.id);
+                    return {
+                        id: p.id,
+                        email: p.email,
+                        role: (roleObj?.role as AppRole) || 'user',
+                        created_at: p.created_at
+                    };
+                });
 
             setProfiles(combined);
         } catch (error: unknown) {
@@ -227,6 +233,7 @@ export default function Admin() {
         }
     };
 
+
     if (authLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
     if (!isAdmin) return <div className="min-h-screen flex items-center justify-center text-destructive font-bold">403 - Forbidden Access</div>;
 
@@ -257,9 +264,8 @@ export default function Admin() {
 
                     <div className="flex bg-card p-1 rounded-2xl border-2 border-border shadow-sm overflow-x-auto max-w-full">
                         {[
-                            { id: 'users', label: 'Generations', icon: Sparkles },
+                            { id: 'users', label: 'Users', icon: Users },
                             { id: 'themes', label: 'Themes', icon: Palette },
-                            { id: 'settings', label: 'Settings', icon: SettingsIcon },
                             { id: 'profile', label: 'My Profile', icon: User },
                         ].map((tab) => (
                             <button
@@ -288,13 +294,6 @@ export default function Admin() {
                         <div className="space-y-6">
                             <div className="flex justify-between items-center">
                                 <h2 className="text-2xl font-bold">Generation Requests</h2>
-                                <button
-                                    onClick={() => setIsAddingUser(true)}
-                                    className="btn-magic flex items-center gap-2"
-                                >
-                                    <Sparkles className="w-4 h-4" />
-                                    Generate Book
-                                </button>
                             </div>
 
                             <div className="card-magical p-0 overflow-hidden">
@@ -304,8 +303,7 @@ export default function Admin() {
                                             <tr>
                                                 <th className="px-6 py-4 font-semibold text-sm">Recipient</th>
                                                 <th className="px-6 py-4 font-semibold text-sm">Type</th>
-                                                <th className="px-6 py-4 font-semibold text-sm">Date</th>
-                                                <th className="px-6 py-4 font-semibold text-sm text-center">Actions</th>
+                                                <th className="px-6 py-4 font-semibold text-sm text-center">Date</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-border/50">
@@ -329,23 +327,12 @@ export default function Admin() {
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-5">
-                                                        <select
-                                                            value={p.role}
-                                                            onChange={(e) => handleUpdateRole(p.id, e.target.value as AppRole)}
-                                                            className="bg-background border-2 border-border rounded-xl px-3 py-1.5 focus:border-primary outline-none text-sm transition-all"
-                                                        >
-                                                            <option value="user">Single</option>
-                                                            <option value="moderator">Multiple</option>
-                                                            <option value="admin">Unlimited</option>
-                                                        </select>
+                                                        <span className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-bold border border-primary/20">
+                                                            Unlimited
+                                                        </span>
                                                     </td>
-                                                    <td className="px-6 py-5 text-sm text-muted-foreground">
+                                                    <td className="px-6 py-5 text-sm text-muted-foreground text-center">
                                                         {new Date(p.created_at).toLocaleDateString()}
-                                                    </td>
-                                                    <td className="px-6 py-5 text-center">
-                                                        <button className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all">
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -428,101 +415,10 @@ export default function Admin() {
                         </div>
                     )}
 
-                    {/* SETTINGS TAB */}
-                    {activeTab === 'settings' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            <div className="card-magical space-y-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/30">
-                                        <Globe className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                                    </div>
-                                    <h3 className="font-bold text-lg">System Access</h3>
-                                </div>
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <div className="font-semibold text-sm">Maintenance Mode</div>
-                                            <div className="text-xs text-muted-foreground">Lock generation for updates.</div>
-                                        </div>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" className="sr-only peer" />
-                                            <div className="w-10 h-5 bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
-                                        </label>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <div className="font-semibold text-sm">Public Registrations</div>
-                                            <div className="text-xs text-muted-foreground">Allow new signups.</div>
-                                        </div>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" defaultChecked className="sr-only peer" />
-                                            <div className="w-10 h-5 bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="card-magical space-y-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                                        <Bell className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                                    </div>
-                                    <h3 className="font-bold text-lg">Notifications</h3>
-                                </div>
-                                <div className="space-y-4 text-sm">
-                                    <div className="flex items-center justify-between">
-                                        <span>New User Alert</span>
-                                        <input type="checkbox" defaultChecked className="accent-primary" />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <span>Generation Completion</span>
-                                        <input type="checkbox" className="accent-primary" />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="card-magical space-y-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
-                                        <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" />
-                                    </div>
-                                    <h3 className="font-bold text-lg text-red-600 dark:text-red-400">Master Reset</h3>
-                                </div>
-                                <p className="text-sm text-muted-foreground">Clear all application state including form data, active generations, and history.</p>
-                                <button
-                                    onClick={() => {
-                                        if (window.confirm('🚨 MASTER RESET: Are you sure you want to clear EVERYTHING? (Form data, active generations, and library history will be lost)')) {
-                                            resetBookStore();
-                                            clearHistory();
-                                            clearDeletedHistory();
-                                            showToast('🚨 Full application reset complete! All magic has been cleared.', 'success');
-                                        }
-                                    }}
-                                    className="w-full py-3 rounded-xl border-2 border-red-500/30 text-red-500 font-bold hover:bg-red-500/10 hover:border-red-500 transition-all flex items-center justify-center gap-2"
-                                >
-                                    <RotateCcw className="w-4 h-4" />
-                                    Reset Everything
-                                </button>
-                            </div>
-
-                            <div className="card-magical space-y-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-lg bg-primary/10">
-                                        <Sparkles className="w-5 h-5 text-primary" />
-                                    </div>
-                                    <h3 className="font-bold text-lg">AI Parameters</h3>
-                                </div>
-                                <div className="p-4 rounded-xl bg-primary/5 text-primary text-xs font-semibold">
-                                    Advanced AI models and temperature settings coming in next update.
-                                </div>
-                            </div>
-                        </div>
-                    )}
 
                     {/* MY PROFILE TAB (Within Admin) */}
                     {activeTab === 'profile' && (
                         <div className="max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-3 gap-8">
-
                             {/* Profile Overview */}
                             <div className="md:col-span-1 space-y-6">
                                 <div className="card-magical text-center py-10 relative overflow-hidden">
@@ -604,6 +500,7 @@ export default function Admin() {
                             </div>
                         </div>
                     )}
+
                 </div>
             </div>
 
@@ -689,7 +586,7 @@ export default function Admin() {
             {/* Theme Modal */}
             {isAddingTheme && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-                    <div className="card-magical w-full max-w-2xl animate-scale-in border-primary/20 max-h-[90vh] overflow-y-auto">
+                    <div className="card-magical w-full max-w-4xl animate-scale-in border-primary/20 max-h-[90vh] overflow-y-auto custom-scrollbar">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-2xl font-bold">{editingTheme ? 'Update' : 'Create'} Magic Theme</h2>
                             <button onClick={() => setIsAddingTheme(false)} className="p-2 hover:bg-secondary rounded-full transition-all">
